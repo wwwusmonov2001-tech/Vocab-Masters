@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worksheet Studio – Classroom Worksheet Maker</title>
+
+<!-- Tailwind CSS (dashboard styling) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- html2pdf.js (client-side PDF export) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  /* ================= Shared worksheet (#sheet) ================= */
+  #sheet {
+    width: 690px;                 /* fits Letter and A4 with 0.5in margins */
+    background: #fff; color: #000;
+    font-family: Verdana, Geneva, "DejaVu Sans", sans-serif;
+    margin: 0 auto;
+  }
+  .sheet-header { display: flex; gap: 24px; align-items: flex-end; font-size: 14px; }
+  .sheet-header .name { flex: 1; display: flex; gap: 6px; }
+  .sheet-header .date { width: 150px; display: flex; gap: 6px; }
+  .sheet-header .line { flex: 1; border-bottom: 1px solid #000; height: 1em; }
+  .sheet-title { text-align: center; font-size: 42px; font-weight: 600; margin: 18px 0 20px; line-height: 1.15; }
+  .sheet-sub { text-align: center; font-size: 15px; font-weight: 600; margin: -10px 0 14px; color: #333; }
+  .sheet-instr { text-align: center; font-size: 13px; font-style: italic; margin: -6px 0 16px; color: #222; }
+  .key-tag { display: none; text-align: center; font-size: 12px; letter-spacing: .15em; font-weight: 700;
+             color: #b91c1c; margin-top: -14px; margin-bottom: 14px; }
+  #sheet.key .key-tag { display: block; }
+  .sheet-footer { margin-top: 28px; padding-top: 8px; border-top: 1px solid #999; text-align: center; font-size: 12px; color: #333; }
+  .ans { color: #1d4ed8; font-weight: 700; }
+
+  /* ---- Crossword ---- */
+  .grid-wrap { display: flex; justify-content: center; margin: 6px 0 26px; }
+  .xgrid { display: grid; }
+  .xcell { position: relative; box-sizing: border-box; background: #fff;
+           border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; }
+  .xcell.bl { border-left: 1.5px solid #000; }
+  .xcell.bt { border-top: 1.5px solid #000; }
+  .xcell .num { position: absolute; top: 1px; left: 2px; line-height: 1; font-family: Arial, sans-serif; }
+  .xcell .ltr { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                font-weight: 700; font-family: Arial, sans-serif; }
+  #sheet:not(.key) .ltr { visibility: hidden; }
+  #sheet.key .ltr { color: #1d4ed8; }
+  .clue-cols { display: flex; gap: 22px; align-items: flex-start; font-size: 13.5px; line-height: 1.32; }
+  .clue-col { flex: 1; min-width: 0; }
+  .clue-col h3 { text-decoration: underline; font-weight: 700; font-size: 15px; margin: 0 0 6px; }
+  .clue-item { margin: 0 0 8px; break-inside: avoid; page-break-inside: avoid; }
+  .clue-item i { color: #333; }
+
+  /* ---- Matching ---- */
+  .m-cols { display: flex; gap: 30px; font-size: 14px; line-height: 1.35; }
+  .m-col { flex: 1; min-width: 0; }
+  .m-col h3, .m-head h3 { font-weight: 700; font-size: 15px; text-decoration: underline; margin: 0 0 10px; }
+  .m-head { display: flex; }
+  .m-item { display: flex; gap: 8px; margin: 0 0 12px; break-inside: avoid; page-break-inside: avoid; }
+  .m-num, .m-let { font-weight: 700; flex: none; min-width: 22px; }
+  .m-box { flex: none; font-family: "Courier New", monospace; white-space: nowrap; }
+  .m-txt { min-width: 0; }
+  .m-row { display: flex; align-items: center; box-sizing: border-box; gap: 6px; font-size: 14px; line-height: 19px; }
+
+  /* ---- Word search / scramble ---- */
+  .wsgrid { display: grid; border: 2px solid #000; }
+  .wscell { display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif; font-weight: 700; }
+  .wscell.hl { background: #fde68a; color: #1d4ed8; border-radius: 50%; }
+  .wb-wrap { display: flex; gap: 22px; align-items: flex-start; font-size: 13.5px; line-height: 1.35; }
+  .wb-col { flex: 1; min-width: 0; }
+  .wb-title { font-weight: 700; font-size: 15px; text-decoration: underline; margin: 0 0 8px; }
+  .wb-item { margin: 0 0 6px; font-weight: 600; letter-spacing: .04em; }
+  .wb-clue { margin: 0 0 8px; break-inside: avoid; page-break-inside: avoid; }
+  .sc-wrap { display: flex; gap: 28px; align-items: flex-start; font-size: 14px; }
+  .sc-col { flex: 1; min-width: 0; }
+  .sc-row { margin: 0 0 16px; break-inside: avoid; page-break-inside: avoid; }
+  .sc-main { display: flex; align-items: flex-end; gap: 8px; }
+  .sc-num { font-weight: 700; flex: none; min-width: 24px; }
+  .sc-scr { font-family: "Courier New", monospace; font-weight: 700; font-size: 17px; letter-spacing: .22em; flex: none; }
+  .sc-line { flex: 1; min-width: 60px; border-bottom: 1px solid #000; height: 22px; text-align: center; font-weight: 700; letter-spacing: .12em; }
+  .sc-clue { font-size: 12.5px; color: #333; margin: 3px 0 0 32px; }
+
+  /* ---- App chrome ---- */
+  .tab-btn[aria-selected="true"] { background: #4f46e5; color: #fff; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px; transition: .2s; cursor: pointer; }
+  .switch .slider:before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
+                           background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: #4f46e5; }
+  .switch input:checked + .slider:before { transform: translateX(20px); }
+
+  /* ---- Print: only the worksheet ---- */
+  @page { margin: 0.5in; }
+  @media print {
+    html, body { background: #fff !important; }
+    .no-print { display: none !important; }
+    .view { display: none !important; }
+    #view-preview { display: block !important; }
+    .sheet-card { box-shadow: none !important; border: 0 !important; padding: 0 !important; background: #fff !important; }
+    .sheet-scroll { overflow: visible !important; }
+    #sheet { width: 690px !important; margin: 0 auto !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  /* =====================================================================
+   *  WORKSHEET CONTENT: fill-in-the-blanks, page guides, density tiers
+   * ===================================================================== */
+  .fb-list { font-size: 15px; }
+  .fb-item { display: flex; gap: 8px; margin: 0 0 12px; line-height: 2.2; break-inside: avoid; page-break-inside: avoid; }
+  .fb-num { font-weight: 700; min-width: 26px; flex: none; }
+  .fb-text { min-width: 0; }
+  .fb-blank { display: inline-block; border-bottom: 1.5px solid #000; text-align: center; margin: 0 3px; line-height: 1.3; height: 1.3em; vertical-align: baseline; }
+  .fb-blank.fb-first { text-align: left; padding-left: 4px; font-weight: 700; }
+  .fb-cnt { font-size: 11px; color: #555; margin-left: 2px; }
+  .fb-bank { border: 1.5px solid #000; border-radius: 8px; padding: 10px 14px 8px; margin: 0 0 18px; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+  .fb-bank-t { font-weight: 700; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
+  .fb-w { display: inline-block; margin: 3px 10px; font-weight: 600; font-size: 15px; }
+  .fb-warn { color: #b45309; }
+  html[data-mode="dark"] .fb-warn { color: #fbbf24; }
+
+  #sheetWrap { position: relative; width: 690px; margin: 0 auto; }
+  #pageGuides .pg-line { position: absolute; left: -14px; right: -14px; border-top: 2px dashed rgba(220,38,38,.55); pointer-events: none; }
+  #pageGuides .pg-line span { position: absolute; right: 0; top: -10px; font: 600 10px/1 ui-sans-serif, system-ui, sans-serif; background: #fee2e2; color: #b91c1c; padding: 3px 7px; border-radius: 99px; }
+  .page-chip { font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: #e2e8f0; color: #334155; white-space: nowrap; }
+  .page-chip.multi { background: #fef3c7; color: #92400e; }
+  .page-chip:empty { display: none; }
+
+  /* =====================================================================
+   *  THEME ENGINE
+   *  html[data-theme]  glass | aurora | sunset | wood | stone | classroom | original
+   *  html[data-mode]   light | dark   (resolved from Auto / Light / Dark)
+   *  html[data-fam]    glass | material | flat   (absent = untouched original look)
+   *  The worksheet (#sheet) is never themed: it stays white paper, so print / PDF
+   *  output is identical in every theme and mode.
+   * ===================================================================== */
+  html[data-mode="dark"] { color-scheme: dark; }
+  html[data-mode="light"] { color-scheme: light; }
+  #themeBg { display: none; }
+  html[data-fam] { background: var(--page-base); }
+  html[data-fam] body.bg-slate-100 { background: transparent; color: var(--text); }
+  html[data-fam] #themeBg { display: block; position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: var(--bg-fill); }
+  html:not([data-fam="glass"]) #themeBg i { display: none; }
+  html[data-fam="glass"] #themeBg i { position: absolute; border-radius: 50%; filter: blur(72px); opacity: var(--orb-o, .55); will-change: transform; }
+  #themeBg i:nth-child(1) { width: 46vmax; height: 46vmax; left: -10vmax; top: -12vmax; background: var(--orb1); animation: orbA 26s ease-in-out infinite alternate; }
+  #themeBg i:nth-child(2) { width: 42vmax; height: 42vmax; right: -14vmax; bottom: -16vmax; background: var(--orb2); animation: orbB 32s ease-in-out infinite alternate; }
+  #themeBg i:nth-child(3) { width: 32vmax; height: 32vmax; left: 38vw; top: 34vh; background: var(--orb3); animation: orbC 38s ease-in-out infinite alternate; opacity: calc(var(--orb-o, .55) * .75); }
+  html[data-fam="glass"] #themeBg::after { content: ""; position: absolute; inset: 0; background: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27240%27%20height%3D%27240%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.9%27%20numOctaves%3D%273%27%20seed%3D%275%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%201%20%200%200%200%200%201%20%200%200%200%200%201%20%200%200%200%201.2%20-0.5%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"); opacity: .55; mix-blend-mode: soft-light; }
+  @keyframes orbA { to { transform: translate(18vmax, 14vmax) scale(1.15); } }
+  @keyframes orbB { to { transform: translate(-20vmax, -12vmax) scale(.9); } }
+  @keyframes orbC { to { transform: translate(-16vmax, 10vmax) scale(1.25); } }
+  @media (prefers-reduced-motion: reduce) {
+    #themeBg i, .seg-thumb, * { animation: none !important; transition-duration: .01s !important; }
+  }
+
+  /* ---------- Shared skin mapping (Tailwind utility classes → tokens) ---------- */
+  html[data-fam] .text-slate-800 { color: var(--text); }
+  html[data-fam] .text-slate-600, html[data-fam] .text-slate-500 { color: var(--muted); }
+  html[data-fam] .text-slate-400 { color: var(--faint); }
+  html[data-fam] ::placeholder { color: var(--faint); opacity: 1; }
+  html[data-fam] header .text-slate-500 { color: var(--hdr-muted); }
+  html[data-fam] header { color: var(--hdr-text); }
+
+  html[data-fam] header.bg-white, html[data-fam] .bg-white.rounded-2xl {
+    background: var(--panel-bg); border-color: var(--panel-border); box-shadow: var(--panel-shadow);
+    -webkit-backdrop-filter: var(--panel-filter, none); backdrop-filter: var(--panel-filter, none);
+  }
+  html[data-fam] header.bg-white { background: var(--hdr-bg); border-color: var(--hdr-border); }
+  html[data-fam] .rounded-2xl { border-radius: var(--r-panel); }
+  html[data-fam] .rounded-xl { border-radius: var(--r-card); }
+  html[data-fam] .rounded-lg { border-radius: var(--r-ctl); }
+  html[data-fam] button.rounded-lg { border-radius: var(--r-btn); }
+  html[data-fam] nav.rounded-xl, html[data-fam] div.bg-slate-100.rounded-xl { border-radius: var(--r-seg); }
+  html[data-fam] .border-slate-200 { border-color: var(--panel-border); }
+  html[data-fam] .bg-white.rounded-2xl { position: relative; }
+  html[data-fam] .sheet-card.bg-white { background: var(--desk); }
+  html[data-fam] .bg-slate-50\/60, html[data-fam] details.bg-slate-50 { background: var(--chip-bg); border-color: var(--panel-border); }
+  html[data-fam] .border-dashed { border-color: var(--inset-border); }
+
+  html[data-fam] input[type="text"], html[data-fam] textarea, html[data-fam] select {
+    background: var(--inset-bg); border-color: var(--inset-border); color: var(--text); box-shadow: var(--inset-shadow); border-radius: var(--r-ctl);
+  }
+  html[data-fam] input[type="text"]:focus, html[data-fam] textarea:focus, html[data-fam] select:focus {
+    border-color: var(--ring); box-shadow: 0 0 0 4px var(--ring-soft), var(--inset-shadow);
+  }
+  html[data-fam] code.bg-white { background: var(--inset-bg); border-color: var(--inset-border); color: var(--text); }
+  html[data-fam] select option { background: var(--menu-solid); color: var(--text); }
+
+  html[data-fam] button.border-slate-300 { background: var(--btn-bg); border-color: var(--inset-border); color: var(--text); }
+  html[data-fam] button.border-slate-300:hover { background: var(--btn-hover); }
+  html[data-fam] button.hover\:bg-red-50:hover { background: var(--err-bg); border-color: var(--err-border); color: var(--err-text); }
+  html[data-fam] .bg-slate-800 { background: var(--dark-btn); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 3px 10px rgba(0,0,0,.25); }
+  html[data-fam] .hover\:bg-slate-900:hover { background: var(--dark-btn-hover); }
+  html[data-fam] .bg-indigo-600 {
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent)); color: var(--on-accent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 8px 22px var(--accent-glow);
+  }
+  html[data-fam] .hover\:bg-indigo-700:hover { background: linear-gradient(180deg, var(--accent-hi), var(--accent)); filter: brightness(1.08); }
+  html[data-fam] .bg-indigo-100 { background: var(--num-bg); }
+  html[data-fam] .text-indigo-700 { color: var(--num-text); }
+  html[data-fam] .bg-indigo-600.text-lg { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 12px 30px var(--accent-glow); }
+
+  .seg { position: relative; }
+  .seg > .tab-btn { position: relative; z-index: 1; }
+  .seg-thumb { display: none; }
+  html[data-fam] nav.bg-slate-100, html[data-fam] div.bg-slate-100.rounded-xl { background: var(--seg-bg); box-shadow: inset 0 1px 3px rgba(0,0,0,.18); }
+  html[data-fam] .tab-btn { color: var(--seg-text); }
+  html[data-fam] .tab-btn[aria-selected="true"] { background: var(--seg-on-bg); color: var(--seg-on-text); box-shadow: var(--seg-on-shadow); }
+
+  html[data-fam] .bg-red-50 { background: var(--err-bg); }
+  html[data-fam] .border-red-200 { border-color: var(--err-border); }
+  html[data-fam] .text-red-800 { color: var(--err-text); }
+  html[data-fam] .bg-amber-50 { background: var(--warn-bg); }
+  html[data-fam] .border-amber-200 { border-color: var(--warn-border); }
+  html[data-fam] .text-amber-900 { color: var(--warn-text); }
+  html[data-fam] .page-chip { background: var(--seg-bg); color: var(--seg-text); }
+  html[data-fam] .page-chip.multi { background: var(--warn-bg); color: var(--warn-text); }
+
+  html[data-fam] .switch { width: 50px; height: 30px; }
+  html[data-fam] .switch .slider { background: var(--sw-off); box-shadow: inset 0 1px 3px rgba(0,0,0,.2); }
+  html[data-fam] .switch .slider:before { width: 26px; height: 26px; left: 2px; top: 2px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.35); transition: transform .3s cubic-bezier(.3,1.5,.5,1), width .2s; }
+  html[data-fam] .switch input:checked + .slider { background: var(--sw-on); }
+  html[data-fam] .switch input:checked + .slider:before { transform: translateX(20px); }
+  html[data-fam] .switch:active .slider:before { width: 34px; }
+  html[data-fam] .switch:active input:checked + .slider:before { transform: translateX(12px); }
+  html[data-fam] .switch input:focus-visible + .slider { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+  html[data-fam] #toast { background: rgba(20,24,44,.84); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-radius: 999px; padding: 10px 20px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  html[data-fam="material"] #toast, html[data-fam="flat"] #toast { border-radius: 8px; }
+
+  /* ---------- Liquid-glass extras ---------- */
+  html[data-fam="glass"] header.bg-white { top: 10px; margin: 10px auto 0; width: calc(100% - 24px); max-width: 1180px; border-radius: 32px; }
+  html[data-fam="glass"] header.bg-white::before, html[data-fam="glass"] .bg-white.rounded-2xl:not(.sheet-card)::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+    background: linear-gradient(135deg, var(--rim-a), rgba(255,255,255,.08) 32%, rgba(255,255,255,.04) 62%, var(--rim-b));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  /* pointer-tracking specular highlight */
+  html[data-fam="glass"] header.bg-white::after, html[data-fam="glass"] .bg-white.rounded-2xl:not(.sheet-card)::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .4s;
+    background: radial-gradient(340px circle at var(--mx, 50%) var(--my, 0%), rgba(255,255,255,var(--spec, .35)), transparent 62%);
+  }
+  html[data-fam="glass"] header.bg-white:hover::after, html[data-fam="glass"] .bg-white.rounded-2xl:not(.sheet-card):hover::after { opacity: 1; }
+  html[data-fam="glass"] .entry { box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 18px rgba(255,255,255,.06); transition: transform .25s cubic-bezier(.3,1.4,.5,1), background .25s; }
+  html[data-fam="glass"] .entry:hover { transform: translateY(-1px); background: var(--chip-hover); }
+  html[data-fam="glass"] button { transition: transform .25s cubic-bezier(.3,1.5,.5,1), background .2s, filter .2s, box-shadow .2s; }
+  html[data-fam="glass"] button:active { transform: scale(.95); }
+  html[data-fam="glass"] .seg-thumb {
+    display: block; position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; z-index: 0; border-radius: 999px; pointer-events: none;
+    background: var(--seg-on-bg); box-shadow: var(--seg-on-shadow);
+  }
+  html[data-fam="glass"] .seg-thumb.ready { transition: transform .45s cubic-bezier(.3,1.35,.5,1), width .45s cubic-bezier(.3,1.35,.5,1); }
+  html[data-fam="glass"] .tab-btn[aria-selected="true"] { background: transparent; box-shadow: none; }
+  html[data-fam="glass"] .bg-indigo-600 { position: relative; overflow: hidden; }
+  html[data-fam="glass"] .bg-indigo-600::after {
+    content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
+    transform: translateX(-120%); transition: transform .8s ease; pointer-events: none;
+  }
+  html[data-fam="glass"] .bg-indigo-600:hover::after { transform: translateX(120%); }
+
+  /* ---------- Wood / stone / classroom / flat extras ---------- */
+  html[data-fam="material"] header.bg-white { border-bottom-width: 3px; }
+  html[data-fam="material"] .bg-white.rounded-2xl { border-width: 2px; }
+  html[data-theme="wood"] h1, html[data-theme="wood"] h2, html[data-theme="classroom"] h1, html[data-theme="classroom"] h2 { font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; }
+  html[data-theme="wood"] header h1 { text-shadow: 0 1px 0 rgba(0,0,0,.45); }
+  html[data-theme="classroom"][data-mode="dark"] header h1, html[data-theme="classroom"][data-mode="dark"] .bg-white.rounded-2xl h2 { text-shadow: 0 0 1px rgba(255,255,255,.35); }
+  html[data-fam="flat"] .bg-indigo-600, html[data-fam="flat"] .bg-indigo-600.text-lg { background: var(--accent); box-shadow: none; }
+  html[data-fam="flat"] .bg-slate-800 { box-shadow: none; }
+
+  /* ---------- Header controls: mode + theme buttons, appearance menu ---------- */
+  #themeWrap { display: flex; gap: 8px; }
+  .theme-btn { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: #f1f5f9; color: #475569;
+               border: 1px solid #cbd5e1; cursor: pointer; transition: transform .2s cubic-bezier(.3,1.5,.5,1), background .2s; }
+  .theme-btn:hover { transform: scale(1.07); }
+  .theme-btn:active { transform: scale(.94); }
+  .theme-btn:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
+  @keyframes spinOnce { from { transform: rotate(-90deg) scale(.6); opacity: .3; } to { transform: none; opacity: 1; } }
+  .theme-btn.spin svg { animation: spinOnce .5s cubic-bezier(.3,1.4,.5,1); }
+  html[data-fam] .theme-btn { background: var(--btn-bg); color: var(--hdr-text); border-color: var(--inset-border); border-radius: var(--r-btn); }
+  html[data-fam="glass"] .theme-btn { border-radius: 999px; box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+  html[data-fam] .theme-btn:hover { background: var(--btn-hover); }
+  html[data-fam="material"] .theme-btn, html[data-fam="flat"] .theme-btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.28); }
+  html[data-fam="material"] .theme-btn:hover, html[data-fam="flat"] .theme-btn:hover { background: rgba(255,255,255,.22); }
+  html[data-theme="classroom"][data-mode="light"] .theme-btn { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.2); }
+  html[data-theme="classroom"][data-mode="light"] .theme-btn:hover { background: rgba(0,0,0,.1); }
+
+  #themeMenu { display: none; position: fixed; z-index: 80; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 90px); overflow: auto;
+               padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 22px; box-shadow: 0 22px 60px rgba(15,23,42,.3); color: #1e293b; }
+  #themeMenu.open { display: block; animation: menuIn .22s cubic-bezier(.3,1.3,.5,1); transform-origin: top right; }
+  @keyframes menuIn { from { opacity: 0; transform: translateY(-8px) scale(.95); } }
+  html[data-mode="dark"] #themeMenu { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  html[data-fam] #themeMenu { background: var(--menu-solid); border-color: var(--panel-border); color: var(--text); border-radius: min(var(--r-panel), 24px); }
+  html[data-fam="glass"] #themeMenu { background: var(--menu-bg); -webkit-backdrop-filter: blur(34px) saturate(190%); backdrop-filter: blur(34px) saturate(190%); box-shadow: var(--panel-shadow); }
+  html[data-fam="material"] #themeMenu { border-width: 2px; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  #themeMenu .menu-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .6; padding: 4px 4px 8px; }
+  .mode-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--seg-bg, #e2e8f0); margin-bottom: 14px; }
+  html[data-mode="dark"] .mode-seg { background: var(--seg-bg, #0f172a); }
+  .mode-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border-radius: 10px; border: 0; cursor: pointer;
+                     background: transparent; color: var(--seg-text, #475569); font-size: 13px; font-weight: 600; }
+  .mode-seg button[aria-checked="true"] { background: var(--seg-on-bg, #fff); color: var(--seg-on-text, #4338ca); box-shadow: var(--seg-on-shadow, 0 1px 3px rgba(0,0,0,.2)); }
+  html[data-mode="dark"] .mode-seg button[aria-checked="true"] { background: var(--seg-on-bg, #334155); color: var(--seg-on-text, #fff); }
+  .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .theme-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 8px; border-radius: 16px; border: 2px solid transparent; background: transparent; cursor: pointer; text-align: left; color: inherit; }
+  .theme-card:hover, .theme-card:focus-visible { background: var(--menu-hover, #eef2ff); outline: none; }
+  html[data-mode="dark"] .theme-card:hover, html[data-mode="dark"] .theme-card:focus-visible { background: var(--menu-hover, #334155); }
+  .theme-card[aria-checked="true"] { border-color: var(--accent, #4f46e5); }
+  .theme-card .t-name { font-weight: 600; font-size: 13px; line-height: 1.1; padding: 0 2px; }
+  .theme-card .t-sub { font-size: 11px; opacity: .6; padding: 0 2px; margin-top: -3px; }
+  .theme-card .t-check { position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; padding: 3px; border-radius: 50%; background: var(--accent, #4f46e5); color: var(--on-accent, #fff); opacity: 0; transform: scale(.5); transition: .25s cubic-bezier(.3,1.5,.5,1); }
+  .theme-card[aria-checked="true"] .t-check { opacity: 1; transform: none; }
+  .t-swatch { height: 58px; border-radius: 11px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.14); }
+  .t-swatch::after { content: ""; position: absolute; left: 9px; right: 9px; bottom: 8px; height: 16px; border-radius: 6px; background: var(--sw-panel); box-shadow: var(--sw-panel-sh, none); }
+  .t-swatch::before { content: ""; position: absolute; left: 9px; top: 9px; width: 30px; height: 6px; border-radius: 3px; background: var(--sw-acc); }
+
+  @media (max-width: 640px) {
+    header > div > div:first-child { order: 1; flex: 1; min-width: 0; }
+    #themeWrap { order: 2; }
+    header nav[role="tablist"] { order: 3; width: 100%; }
+  }
+
+  /* ---------- Print: the theme never leaks into output ---------- */
+  @media print {
+    #themeBg, #themeMenu { display: none !important; }
+    html[data-fam], html[data-fam] body.bg-slate-100 { background: #fff !important; }
+    html[data-fam] .sheet-card { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: none !important; border: 0 !important; background: #fff !important; }
+    #sheetWrap { width: 690px !important; margin: 0 auto !important; }
+  }
+
+  /* ---------- Design tokens: 7 themes × light/dark (generated) ---------- */
+  html[data-theme="glass"][data-mode="light"] {
+    --page-base: #eaf0ff;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(255,160,210,.75), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(120,180,255,.85), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(130,235,200,.7), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(255,205,130,.75), transparent 70%), linear-gradient(160deg, #eef3ff, #f6ecff);
+    --orb1: #ff9bd0;
+    --orb2: #6fb1ff;
+    --orb3: #ffd08a;
+    --orb-o: 0.55;
+    --accent: #0a7cff;
+    --accent-hi: #55adff;
+    --on-accent: #fff;
+    --accent-glow: color-mix(in srgb, #0a7cff 40%, transparent);
+    --ring: color-mix(in srgb, #0a7cff 78%, transparent);
+    --ring-soft: color-mix(in srgb, #0a7cff 24%, transparent);
+    --sw-on: #34c759;
+    --num-bg: color-mix(in srgb, #0a7cff 16%, transparent);
+    --num-text: color-mix(in srgb, #0a7cff 70%, #000);
+    --seg-on-text: color-mix(in srgb, #0a7cff 78%, #000);
+    --text: #16203a;
+    --muted: #46537a;
+    --faint: #74809f;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.64), rgba(255,255,255,.26));
+    --panel-border: rgba(255,255,255,.55);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -1px 1px rgba(255,255,255,.35), inset 0 0 22px rgba(255,255,255,.16), 0 14px 44px rgba(52,72,140,.17), 0 2px 6px rgba(52,72,140,.08);
+    --panel-filter: blur(26px) saturate(190%) brightness(1.04);
+    --rim-a: rgba(255,255,255,.98);
+    --rim-b: rgba(255,255,255,.6);
+    --spec: .42;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.7), rgba(255,255,255,.34));
+    --hdr-border: rgba(255,255,255,.55);
+    --hdr-text: #16203a;
+    --hdr-muted: #5a6788;
+    --inset-bg: rgba(255,255,255,.5);
+    --inset-border: rgba(255,255,255,.75);
+    --inset-shadow: inset 0 1px 3px rgba(40,60,120,.14), 0 1px 0 rgba(255,255,255,.6);
+    --chip-bg: rgba(255,255,255,.34);
+    --chip-hover: rgba(255,255,255,.5);
+    --seg-bg: rgba(104,118,160,.2);
+    --seg-text: #2b3658;
+    --seg-on-bg: linear-gradient(180deg, #fff, rgba(255,255,255,.86));
+    --seg-on-shadow: 0 2px 10px rgba(40,60,120,.24), inset 0 1px 0 #fff;
+    --dark-btn: linear-gradient(180deg, #3a4668, #1f2742);
+    --dark-btn-hover: linear-gradient(180deg, #46547c, #2a3354);
+    --btn-bg: rgba(255,255,255,.5);
+    --btn-hover: rgba(255,255,255,.8);
+    --sw-off: rgba(110,120,150,.34);
+    --err-bg: rgba(255,59,48,.13);
+    --err-border: rgba(255,59,48,.35);
+    --err-text: #8f1d16;
+    --warn-bg: rgba(255,159,10,.17);
+    --warn-border: rgba(255,159,10,.4);
+    --warn-text: #744400;
+    --menu-bg: rgba(250,252,255,.7);
+    --menu-solid: #f6f8ff;
+    --menu-hover: rgba(0,0,0,.06);
+    --desk: rgba(80,96,150,.22);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="glass"][data-mode="dark"] {
+    --page-base: #0a0e24;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(120,70,255,.5), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(10,132,255,.45), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(0,200,170,.32), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(255,90,170,.2), transparent 70%), linear-gradient(160deg, #0a0e24, #151034);
+    --orb1: #6a3cff;
+    --orb2: #0a84ff;
+    --orb3: #14b8a6;
+    --orb-o: 0.4;
+    --accent: #0a84ff;
+    --accent-hi: #5eb2ff;
+    --on-accent: #fff;
+    --accent-glow: color-mix(in srgb, #0a84ff 55%, transparent);
+    --ring: color-mix(in srgb, #0a84ff 78%, transparent);
+    --ring-soft: color-mix(in srgb, #0a84ff 24%, transparent);
+    --sw-on: #30d158;
+    --num-bg: color-mix(in srgb, #0a84ff 26%, transparent);
+    --num-text: #5eb2ff;
+    --seg-on-text: #fff;
+    --text: #eef1ff;
+    --muted: #aab4d8;
+    --faint: #7f8ab3;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.17), rgba(255,255,255,.05));
+    --panel-border: rgba(255,255,255,.2);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.35), inset 0 -1px 1px rgba(255,255,255,.08), inset 0 0 22px rgba(255,255,255,.04), 0 16px 48px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+    --panel-filter: blur(28px) saturate(170%);
+    --rim-a: rgba(255,255,255,.55);
+    --rim-b: rgba(255,255,255,.28);
+    --spec: .14;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.07));
+    --hdr-border: rgba(255,255,255,.2);
+    --hdr-text: #f4f6ff;
+    --hdr-muted: #aab4d8;
+    --inset-bg: rgba(0,0,0,.3);
+    --inset-border: rgba(255,255,255,.14);
+    --inset-shadow: inset 0 1px 4px rgba(0,0,0,.4);
+    --chip-bg: rgba(255,255,255,.07);
+    --chip-hover: rgba(255,255,255,.12);
+    --seg-bg: rgba(0,0,0,.34);
+    --seg-text: #c6cdea;
+    --seg-on-bg: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.16));
+    --seg-on-shadow: 0 2px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.45);
+    --dark-btn: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+    --dark-btn-hover: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
+    --btn-bg: rgba(255,255,255,.1);
+    --btn-hover: rgba(255,255,255,.2);
+    --sw-off: rgba(255,255,255,.22);
+    --err-bg: rgba(255,69,58,.2);
+    --err-border: rgba(255,69,58,.45);
+    --err-text: #ffb8b2;
+    --warn-bg: rgba(255,159,10,.2);
+    --warn-border: rgba(255,159,10,.45);
+    --warn-text: #ffdca3;
+    --menu-bg: rgba(28,32,64,.62);
+    --menu-solid: #1b2040;
+    --menu-hover: rgba(255,255,255,.1);
+    --desk: rgba(0,0,0,.3);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="aurora"][data-mode="light"] {
+    --page-base: #e6fbf4;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(94,234,212,.8), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(167,139,250,.7), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(125,211,252,.75), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(190,242,100,.55), transparent 70%), linear-gradient(160deg, #e9fbf6, #efeaff);
+    --orb1: #5eead4;
+    --orb2: #a78bfa;
+    --orb3: #7dd3fc;
+    --orb-o: 0.55;
+    --accent: #0f766e;
+    --accent-hi: #16a99c;
+    --on-accent: #fff;
+    --accent-glow: color-mix(in srgb, #0f766e 40%, transparent);
+    --ring: color-mix(in srgb, #0f766e 78%, transparent);
+    --ring-soft: color-mix(in srgb, #0f766e 24%, transparent);
+    --sw-on: #34c759;
+    --num-bg: color-mix(in srgb, #0f766e 16%, transparent);
+    --num-text: color-mix(in srgb, #0f766e 70%, #000);
+    --seg-on-text: color-mix(in srgb, #0f766e 78%, #000);
+    --text: #16203a;
+    --muted: #46537a;
+    --faint: #74809f;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.64), rgba(255,255,255,.26));
+    --panel-border: rgba(255,255,255,.55);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -1px 1px rgba(255,255,255,.35), inset 0 0 22px rgba(255,255,255,.16), 0 14px 44px rgba(52,72,140,.17), 0 2px 6px rgba(52,72,140,.08);
+    --panel-filter: blur(26px) saturate(190%) brightness(1.04);
+    --rim-a: rgba(255,255,255,.98);
+    --rim-b: rgba(255,255,255,.6);
+    --spec: .42;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.7), rgba(255,255,255,.34));
+    --hdr-border: rgba(255,255,255,.55);
+    --hdr-text: #16203a;
+    --hdr-muted: #5a6788;
+    --inset-bg: rgba(255,255,255,.5);
+    --inset-border: rgba(255,255,255,.75);
+    --inset-shadow: inset 0 1px 3px rgba(40,60,120,.14), 0 1px 0 rgba(255,255,255,.6);
+    --chip-bg: rgba(255,255,255,.34);
+    --chip-hover: rgba(255,255,255,.5);
+    --seg-bg: rgba(104,118,160,.2);
+    --seg-text: #2b3658;
+    --seg-on-bg: linear-gradient(180deg, #fff, rgba(255,255,255,.86));
+    --seg-on-shadow: 0 2px 10px rgba(40,60,120,.24), inset 0 1px 0 #fff;
+    --dark-btn: linear-gradient(180deg, #3a4668, #1f2742);
+    --dark-btn-hover: linear-gradient(180deg, #46547c, #2a3354);
+    --btn-bg: rgba(255,255,255,.5);
+    --btn-hover: rgba(255,255,255,.8);
+    --sw-off: rgba(110,120,150,.34);
+    --err-bg: rgba(255,59,48,.13);
+    --err-border: rgba(255,59,48,.35);
+    --err-text: #8f1d16;
+    --warn-bg: rgba(255,159,10,.17);
+    --warn-border: rgba(255,159,10,.4);
+    --warn-text: #744400;
+    --menu-bg: rgba(250,252,255,.7);
+    --menu-solid: #f6f8ff;
+    --menu-hover: rgba(0,0,0,.06);
+    --desk: rgba(80,96,150,.22);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="aurora"][data-mode="dark"] {
+    --page-base: #041419;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(20,184,166,.45), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(139,92,246,.5), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(52,211,153,.3), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(56,189,248,.25), transparent 70%), linear-gradient(160deg, #041419, #0d1033);
+    --orb1: #14b8a6;
+    --orb2: #8b5cf6;
+    --orb3: #34d399;
+    --orb-o: 0.42;
+    --accent: #2dd4bf;
+    --accent-hi: #7ae8d8;
+    --on-accent: #042f2e;
+    --accent-glow: color-mix(in srgb, #2dd4bf 55%, transparent);
+    --ring: color-mix(in srgb, #2dd4bf 78%, transparent);
+    --ring-soft: color-mix(in srgb, #2dd4bf 24%, transparent);
+    --sw-on: #30d158;
+    --num-bg: color-mix(in srgb, #2dd4bf 26%, transparent);
+    --num-text: #7ae8d8;
+    --seg-on-text: #fff;
+    --text: #eef1ff;
+    --muted: #aab4d8;
+    --faint: #7f8ab3;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.17), rgba(255,255,255,.05));
+    --panel-border: rgba(255,255,255,.2);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.35), inset 0 -1px 1px rgba(255,255,255,.08), inset 0 0 22px rgba(255,255,255,.04), 0 16px 48px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+    --panel-filter: blur(28px) saturate(170%);
+    --rim-a: rgba(255,255,255,.55);
+    --rim-b: rgba(255,255,255,.28);
+    --spec: .14;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.07));
+    --hdr-border: rgba(255,255,255,.2);
+    --hdr-text: #f4f6ff;
+    --hdr-muted: #aab4d8;
+    --inset-bg: rgba(0,0,0,.3);
+    --inset-border: rgba(255,255,255,.14);
+    --inset-shadow: inset 0 1px 4px rgba(0,0,0,.4);
+    --chip-bg: rgba(255,255,255,.07);
+    --chip-hover: rgba(255,255,255,.12);
+    --seg-bg: rgba(0,0,0,.34);
+    --seg-text: #c6cdea;
+    --seg-on-bg: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.16));
+    --seg-on-shadow: 0 2px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.45);
+    --dark-btn: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+    --dark-btn-hover: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
+    --btn-bg: rgba(255,255,255,.1);
+    --btn-hover: rgba(255,255,255,.2);
+    --sw-off: rgba(255,255,255,.22);
+    --err-bg: rgba(255,69,58,.2);
+    --err-border: rgba(255,69,58,.45);
+    --err-text: #ffb8b2;
+    --warn-bg: rgba(255,159,10,.2);
+    --warn-border: rgba(255,159,10,.45);
+    --warn-text: #ffdca3;
+    --menu-bg: rgba(28,32,64,.62);
+    --menu-solid: #1b2040;
+    --menu-hover: rgba(255,255,255,.1);
+    --desk: rgba(0,0,0,.3);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="sunset"][data-mode="light"] {
+    --page-base: #fff0e6;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(255,153,102,.8), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(255,94,138,.55), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(196,148,255,.6), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(255,205,120,.75), transparent 70%), linear-gradient(160deg, #fff3ea, #ffe6f2);
+    --orb1: #ff9966;
+    --orb2: #ff5e8a;
+    --orb3: #c79bff;
+    --orb-o: 0.55;
+    --accent: #d9441f;
+    --accent-hi: #f0724c;
+    --on-accent: #fff;
+    --accent-glow: color-mix(in srgb, #d9441f 40%, transparent);
+    --ring: color-mix(in srgb, #d9441f 78%, transparent);
+    --ring-soft: color-mix(in srgb, #d9441f 24%, transparent);
+    --sw-on: #34c759;
+    --num-bg: color-mix(in srgb, #d9441f 16%, transparent);
+    --num-text: color-mix(in srgb, #d9441f 70%, #000);
+    --seg-on-text: color-mix(in srgb, #d9441f 78%, #000);
+    --text: #16203a;
+    --muted: #46537a;
+    --faint: #74809f;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.64), rgba(255,255,255,.26));
+    --panel-border: rgba(255,255,255,.55);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -1px 1px rgba(255,255,255,.35), inset 0 0 22px rgba(255,255,255,.16), 0 14px 44px rgba(52,72,140,.17), 0 2px 6px rgba(52,72,140,.08);
+    --panel-filter: blur(26px) saturate(190%) brightness(1.04);
+    --rim-a: rgba(255,255,255,.98);
+    --rim-b: rgba(255,255,255,.6);
+    --spec: .42;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.7), rgba(255,255,255,.34));
+    --hdr-border: rgba(255,255,255,.55);
+    --hdr-text: #16203a;
+    --hdr-muted: #5a6788;
+    --inset-bg: rgba(255,255,255,.5);
+    --inset-border: rgba(255,255,255,.75);
+    --inset-shadow: inset 0 1px 3px rgba(40,60,120,.14), 0 1px 0 rgba(255,255,255,.6);
+    --chip-bg: rgba(255,255,255,.34);
+    --chip-hover: rgba(255,255,255,.5);
+    --seg-bg: rgba(104,118,160,.2);
+    --seg-text: #2b3658;
+    --seg-on-bg: linear-gradient(180deg, #fff, rgba(255,255,255,.86));
+    --seg-on-shadow: 0 2px 10px rgba(40,60,120,.24), inset 0 1px 0 #fff;
+    --dark-btn: linear-gradient(180deg, #3a4668, #1f2742);
+    --dark-btn-hover: linear-gradient(180deg, #46547c, #2a3354);
+    --btn-bg: rgba(255,255,255,.5);
+    --btn-hover: rgba(255,255,255,.8);
+    --sw-off: rgba(110,120,150,.34);
+    --err-bg: rgba(255,59,48,.13);
+    --err-border: rgba(255,59,48,.35);
+    --err-text: #8f1d16;
+    --warn-bg: rgba(255,159,10,.17);
+    --warn-border: rgba(255,159,10,.4);
+    --warn-text: #744400;
+    --menu-bg: rgba(250,252,255,.7);
+    --menu-solid: #f6f8ff;
+    --menu-hover: rgba(0,0,0,.06);
+    --desk: rgba(80,96,150,.22);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="sunset"][data-mode="dark"] {
+    --page-base: #1a0b1c;
+    --bg-fill: radial-gradient(45% 40% at 12% 8%, rgba(255,94,98,.4), transparent 70%), radial-gradient(40% 45% at 90% 10%, rgba(142,45,226,.5), transparent 70%), radial-gradient(50% 50% at 80% 95%, rgba(255,153,102,.3), transparent 70%), radial-gradient(40% 40% at 6% 90%, rgba(255,60,140,.22), transparent 70%), linear-gradient(160deg, #1a0b1c, #2a0f22);
+    --orb1: #ff5e62;
+    --orb2: #8e2de2;
+    --orb3: #ff9966;
+    --orb-o: 0.42;
+    --accent: #ff7a59;
+    --accent-hi: #ffa385;
+    --on-accent: #2a0a05;
+    --accent-glow: color-mix(in srgb, #ff7a59 55%, transparent);
+    --ring: color-mix(in srgb, #ff7a59 78%, transparent);
+    --ring-soft: color-mix(in srgb, #ff7a59 24%, transparent);
+    --sw-on: #30d158;
+    --num-bg: color-mix(in srgb, #ff7a59 26%, transparent);
+    --num-text: #ffa385;
+    --seg-on-text: #fff;
+    --text: #eef1ff;
+    --muted: #aab4d8;
+    --faint: #7f8ab3;
+    --panel-bg: linear-gradient(145deg, rgba(255,255,255,.17), rgba(255,255,255,.05));
+    --panel-border: rgba(255,255,255,.2);
+    --panel-shadow: inset 0 1.5px 1px rgba(255,255,255,.35), inset 0 -1px 1px rgba(255,255,255,.08), inset 0 0 22px rgba(255,255,255,.04), 0 16px 48px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+    --panel-filter: blur(28px) saturate(170%);
+    --rim-a: rgba(255,255,255,.55);
+    --rim-b: rgba(255,255,255,.28);
+    --spec: .14;
+    --hdr-bg: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.07));
+    --hdr-border: rgba(255,255,255,.2);
+    --hdr-text: #f4f6ff;
+    --hdr-muted: #aab4d8;
+    --inset-bg: rgba(0,0,0,.3);
+    --inset-border: rgba(255,255,255,.14);
+    --inset-shadow: inset 0 1px 4px rgba(0,0,0,.4);
+    --chip-bg: rgba(255,255,255,.07);
+    --chip-hover: rgba(255,255,255,.12);
+    --seg-bg: rgba(0,0,0,.34);
+    --seg-text: #c6cdea;
+    --seg-on-bg: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.16));
+    --seg-on-shadow: 0 2px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.45);
+    --dark-btn: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+    --dark-btn-hover: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.14));
+    --btn-bg: rgba(255,255,255,.1);
+    --btn-hover: rgba(255,255,255,.2);
+    --sw-off: rgba(255,255,255,.22);
+    --err-bg: rgba(255,69,58,.2);
+    --err-border: rgba(255,69,58,.45);
+    --err-text: #ffb8b2;
+    --warn-bg: rgba(255,159,10,.2);
+    --warn-border: rgba(255,159,10,.45);
+    --warn-text: #ffdca3;
+    --menu-bg: rgba(28,32,64,.62);
+    --menu-solid: #1b2040;
+    --menu-hover: rgba(255,255,255,.1);
+    --desk: rgba(0,0,0,.3);
+    --r-panel: 30px;
+    --r-card: 22px;
+    --r-ctl: 14px;
+    --r-btn: 999px;
+    --r-seg: 999px;
+  }
+  html[data-theme="wood"][data-mode="light"] {
+    --page-base: #8a5a2e;
+    --bg-fill: radial-gradient(ellipse at 50% 30%, transparent 45%, rgba(25,10,0,.5) 100%), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27900%27%3E%3Cfilter%20id%3D%27w%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.045%200.0028%27%20numOctaves%3D%274%27%20seed%3D%277%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.30%20%200%200%200%200%200.16%20%200%200%200%200%200.05%20%200%200%200%201.7%20-0.55%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23w)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(90deg, transparent 0 180px, rgba(60,30,5,.14) 180px 360px, rgba(255,220,160,.1) 360px 540px, rgba(40,20,0,.2) 540px 720px, rgba(255,230,180,.04) 720px 900px) 0 0 / 900px 100%, repeating-linear-gradient(90deg, transparent 0 177px, rgba(30,14,2,.6) 177px 179px, rgba(255,230,180,.14) 179px 180px), #a8713c;
+    --text: #3a2412;
+    --muted: #6b4a2d;
+    --faint: #8e6d4d;
+    --panel-bg: linear-gradient(180deg, #f7ecd5, #ecdcbc);
+    --panel-border: #6e4724;
+    --panel-shadow: inset 0 0 0 1px rgba(255,249,232,.75), inset 0 3px 8px rgba(120,80,30,.14), 0 3px 0 #4a2e14, 0 14px 26px rgba(25,10,0,.5);
+    --hdr-bg: linear-gradient(180deg, #6a4624, #46290f);
+    --hdr-border: #2c1807;
+    --hdr-text: #fbe9c6;
+    --hdr-muted: #d9b988;
+    --inset-bg: #fcf6e6;
+    --inset-border: #b08c5f;
+    --inset-shadow: inset 0 2px 4px rgba(90,58,28,.2);
+    --chip-bg: rgba(139,94,52,.1);
+    --seg-bg: #3f2610;
+    --seg-text: #f1dcb8;
+    --seg-on-bg: linear-gradient(180deg, #ecc48a, #c9924f);
+    --seg-on-text: #2e1a08;
+    --seg-on-shadow: 0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,240,205,.7);
+    --accent: #9a5520;
+    --accent-hi: #c9803a;
+    --on-accent: #fff6e4;
+    --accent-glow: rgba(70,30,0,.45);
+    --dark-btn: linear-gradient(180deg, #5d3a1c, #3a2210);
+    --dark-btn-hover: linear-gradient(180deg, #70461f, #472912);
+    --btn-bg: linear-gradient(180deg, #fbf3df, #ead9b8);
+    --btn-hover: linear-gradient(180deg, #fffaf0, #f1e2c4);
+    --sw-on: #6b8e23;
+    --sw-off: #a58863;
+    --ring: rgba(154,85,32,.85);
+    --ring-soft: rgba(154,85,32,.25);
+    --num-bg: #e2c08d;
+    --num-text: #5a3410;
+    --err-bg: #f6d4c8;
+    --err-border: #b4472f;
+    --err-text: #7a1f0f;
+    --warn-bg: #f7e2b0;
+    --warn-border: #b8872b;
+    --warn-text: #5e3d00;
+    --menu-bg: #f7ecd5;
+    --menu-solid: #f7ecd5;
+    --menu-hover: #ead6ae;
+    --desk: linear-gradient(180deg, #5d3b1d, #4a2f16);
+    --r-panel: 14px;
+    --r-card: 10px;
+    --r-ctl: 9px;
+    --r-btn: 9px;
+    --r-seg: 11px;
+  }
+  html[data-theme="wood"][data-mode="dark"] {
+    --page-base: #3a2512;
+    --bg-fill: radial-gradient(ellipse at 50% 30%, transparent 35%, rgba(0,0,0,.6) 100%), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27900%27%3E%3Cfilter%20id%3D%27w%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.045%200.0028%27%20numOctaves%3D%274%27%20seed%3D%277%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.30%20%200%200%200%200%200.16%20%200%200%200%200%200.05%20%200%200%200%201.7%20-0.55%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23w)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(90deg, transparent 0 180px, rgba(0,0,0,.2) 180px 360px, rgba(255,200,140,.05) 360px 540px, rgba(0,0,0,.28) 540px 720px, rgba(255,210,150,.02) 720px 900px) 0 0 / 900px 100%, repeating-linear-gradient(90deg, transparent 0 177px, rgba(0,0,0,.7) 177px 179px, rgba(255,210,150,.08) 179px 180px), #5a3a1d;
+    --text: #f5e6c8;
+    --muted: #cfb18a;
+    --faint: #a58863;
+    --panel-bg: linear-gradient(180deg, #4b3320, #3a2616);
+    --panel-border: #8c6030;
+    --panel-shadow: inset 0 0 0 1px rgba(255,220,160,.12), inset 0 3px 8px rgba(0,0,0,.25), 0 3px 0 #1d1108, 0 14px 26px rgba(0,0,0,.6);
+    --hdr-bg: linear-gradient(180deg, #3a2412, #24150a);
+    --hdr-border: #120a04;
+    --hdr-text: #fbe9c6;
+    --hdr-muted: #caa97a;
+    --inset-bg: #2a1a0e;
+    --inset-border: #6b4a2c;
+    --inset-shadow: inset 0 2px 4px rgba(0,0,0,.45);
+    --chip-bg: rgba(255,220,160,.06);
+    --seg-bg: #1c1108;
+    --seg-text: #e6cfa6;
+    --seg-on-bg: linear-gradient(180deg, #e0ad6a, #b57c3a);
+    --seg-on-text: #2a1503;
+    --seg-on-shadow: 0 2px 4px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,235,200,.6);
+    --accent: #c9803a;
+    --accent-hi: #e0a25c;
+    --on-accent: #2a1503;
+    --accent-glow: rgba(0,0,0,.5);
+    --dark-btn: linear-gradient(180deg, #6a4524, #46290f);
+    --dark-btn-hover: linear-gradient(180deg, #7c5230, #54331a);
+    --btn-bg: linear-gradient(180deg, #5a4028, #45301c);
+    --btn-hover: linear-gradient(180deg, #6b4d31, #523a22);
+    --sw-on: #8db33a;
+    --sw-off: #6b5238;
+    --ring: rgba(224,162,92,.9);
+    --ring-soft: rgba(224,162,92,.28);
+    --num-bg: rgba(224,162,92,.25);
+    --num-text: #f0c58a;
+    --err-bg: rgba(220,90,60,.25);
+    --err-border: #c4553a;
+    --err-text: #ffc4b3;
+    --warn-bg: rgba(224,170,60,.22);
+    --warn-border: #b8872b;
+    --warn-text: #f5d58a;
+    --menu-bg: #3a2616;
+    --menu-solid: #3a2616;
+    --menu-hover: #563a22;
+    --desk: linear-gradient(180deg, #2a1a0c, #1f1308);
+    --r-panel: 14px;
+    --r-card: 10px;
+    --r-ctl: 9px;
+    --r-btn: 9px;
+    --r-seg: 11px;
+  }
+  html[data-theme="stone"][data-mode="light"] {
+    --page-base: #6d7378;
+    --bg-fill: radial-gradient(ellipse at 50% 30%, transparent 45%, rgba(10,12,14,.45) 100%), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%201.0%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), radial-gradient(60% 60% at 30% 30%, rgba(255,255,255,.1), transparent 70%) 0 0 / 520px 360px, linear-gradient(rgba(255,255,255,.14) 0 1px, rgba(18,20,23,.55) 1px 4px, transparent 4px) 0 0 / 100% 180px, linear-gradient(90deg, rgba(255,255,255,.14) 0 1px, rgba(18,20,23,.55) 1px 4px, transparent 4px) 0 0 / 260px 100%, #6d7378;
+    --text: #23272b;
+    --muted: #50575e;
+    --faint: #7a8189;
+    --panel-bg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%200.3%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(180deg, #ecebe7, #dedcd6);
+    --panel-border: #5e6469;
+    --panel-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -2px 0 rgba(0,0,0,.08), 0 2px 0 #3b3f44, 0 12px 24px rgba(10,12,14,.45);
+    --hdr-bg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%201.0%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(180deg, #4a5056, #30353a);
+    --hdr-border: #1d2124;
+    --hdr-text: #eeece6;
+    --hdr-muted: #bcc0c4;
+    --inset-bg: #f5f4f0;
+    --inset-border: #a4a8ab;
+    --inset-shadow: inset 0 2px 3px rgba(0,0,0,.14);
+    --chip-bg: rgba(60,66,72,.08);
+    --seg-bg: #2b2f33;
+    --seg-text: #d9d8d2;
+    --seg-on-bg: linear-gradient(180deg, #f6f5f1, #d6d4ce);
+    --seg-on-text: #23272b;
+    --seg-on-shadow: 0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 #fff;
+    --accent: #3f6b5e;
+    --accent-hi: #5f9686;
+    --on-accent: #f4faf7;
+    --accent-glow: rgba(15,40,33,.4);
+    --dark-btn: linear-gradient(180deg, #4c5258, #2e3237);
+    --dark-btn-hover: linear-gradient(180deg, #5b626a, #383d43);
+    --btn-bg: linear-gradient(180deg, #f6f5f1, #e1dfd9);
+    --btn-hover: linear-gradient(180deg, #ffffff, #ebe9e3);
+    --sw-on: #3f8f6f;
+    --sw-off: #9aa0a5;
+    --ring: rgba(63,107,94,.85);
+    --ring-soft: rgba(63,107,94,.25);
+    --num-bg: #cfd8d3;
+    --num-text: #274c41;
+    --err-bg: #f1d3cf;
+    --err-border: #a94a40;
+    --err-text: #6f1d15;
+    --warn-bg: #efe2bd;
+    --warn-border: #a68a3c;
+    --warn-text: #574100;
+    --menu-bg: #eceae5;
+    --menu-solid: #eceae5;
+    --menu-hover: #d8d6cf;
+    --desk: linear-gradient(180deg, #4d5359, #3b4046);
+    --r-panel: 8px;
+    --r-card: 6px;
+    --r-ctl: 5px;
+    --r-btn: 5px;
+    --r-seg: 7px;
+  }
+  html[data-theme="stone"][data-mode="dark"] {
+    --page-base: #2a2d31;
+    --bg-fill: radial-gradient(ellipse at 50% 30%, transparent 40%, rgba(0,0,0,.55) 100%), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%201.0%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), radial-gradient(60% 60% at 30% 30%, rgba(255,255,255,.05), transparent 70%) 0 0 / 520px 360px, linear-gradient(rgba(255,255,255,.07) 0 1px, rgba(0,0,0,.6) 1px 4px, transparent 4px) 0 0 / 100% 180px, linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, rgba(0,0,0,.6) 1px 4px, transparent 4px) 0 0 / 260px 100%, #3a3e43;
+    --text: #ecebe6;
+    --muted: #b4b8bc;
+    --faint: #868c92;
+    --panel-bg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%200.3%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(180deg, #3d4247, #2f3338);
+    --panel-border: #15181b;
+    --panel-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -2px 0 rgba(0,0,0,.25), 0 2px 0 #0c0e10, 0 14px 28px rgba(0,0,0,.55);
+    --hdr-bg: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27300%27%20height%3D%27300%27%3E%3Cfilter%20id%3D%27n%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20seed%3D%2711%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%200.12%20%200%200%200%200%200.13%20%200%200%200%200%200.15%20%200%200%200%201.0%20-0.12%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23n)%27%2F%3E%3C%2Fsvg%3E"), linear-gradient(180deg, #2c3035, #1b1e22);
+    --hdr-border: #0a0b0d;
+    --hdr-text: #f0eee8;
+    --hdr-muted: #a9aeb3;
+    --inset-bg: #22262a;
+    --inset-border: #4d5359;
+    --inset-shadow: inset 0 2px 4px rgba(0,0,0,.45);
+    --chip-bg: rgba(255,255,255,.05);
+    --seg-bg: #16181b;
+    --seg-text: #c9ccd0;
+    --seg-on-bg: linear-gradient(180deg, #5a6068, #444a51);
+    --seg-on-text: #fff;
+    --seg-on-shadow: 0 2px 4px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.25);
+    --accent: #6fb09c;
+    --accent-hi: #93cbb9;
+    --on-accent: #0d1f19;
+    --accent-glow: rgba(0,0,0,.5);
+    --dark-btn: linear-gradient(180deg, #5a6068, #3c4147);
+    --dark-btn-hover: linear-gradient(180deg, #6a7078, #484e55);
+    --btn-bg: linear-gradient(180deg, #4a5057, #3a3f45);
+    --btn-hover: linear-gradient(180deg, #5a6068, #454a51);
+    --sw-on: #4fb08a;
+    --sw-off: #5a6068;
+    --ring: rgba(147,203,185,.9);
+    --ring-soft: rgba(147,203,185,.28);
+    --num-bg: rgba(111,176,156,.25);
+    --num-text: #a8dccb;
+    --err-bg: rgba(230,100,85,.22);
+    --err-border: #c25a4d;
+    --err-text: #ffc6bd;
+    --warn-bg: rgba(220,180,70,.2);
+    --warn-border: #a68a3c;
+    --warn-text: #f2de9a;
+    --menu-bg: #2f3338;
+    --menu-solid: #2f3338;
+    --menu-hover: #43484e;
+    --desk: linear-gradient(180deg, #1d2024, #15171a);
+    --r-panel: 8px;
+    --r-card: 6px;
+    --r-ctl: 5px;
+    --r-btn: 5px;
+    --r-seg: 7px;
+  }
+  html[data-theme="classroom"][data-mode="light"] {
+    --page-base: #e3eaef;
+    --bg-fill: radial-gradient(ellipse at 50% 15%, rgba(255,255,255,.8), transparent 60%), linear-gradient(rgba(70,110,150,.09) 1px, transparent 1px) 0 0 / 32px 32px, linear-gradient(90deg, rgba(70,110,150,.09) 1px, transparent 1px) 0 0 / 32px 32px, #eaf0f4;
+    --text: #1c2733;
+    --muted: #4b5a69;
+    --faint: #7a8896;
+    --panel-bg: #ffffff;
+    --panel-border: #98a6b3;
+    --panel-shadow: inset 0 0 0 1px #fff, 0 3px 0 #b6c1cb, 0 12px 24px rgba(40,60,80,.2);
+    --hdr-bg: linear-gradient(180deg, #f6f9fb, #dde5eb);
+    --hdr-border: #a4b1bd;
+    --hdr-text: #1c2733;
+    --hdr-muted: #5b6a78;
+    --inset-bg: #f7fafc;
+    --inset-border: #b7c3ce;
+    --inset-shadow: inset 0 1px 2px rgba(0,0,0,.08);
+    --chip-bg: rgba(37,99,235,.05);
+    --seg-bg: #cdd8e0;
+    --seg-text: #2d3a46;
+    --seg-on-bg: #ffffff;
+    --seg-on-text: #1d4ed8;
+    --seg-on-shadow: 0 1px 3px rgba(0,0,0,.28);
+    --accent: #2563eb;
+    --accent-hi: #4f84f0;
+    --on-accent: #ffffff;
+    --accent-glow: rgba(37,99,235,.3);
+    --dark-btn: linear-gradient(180deg, #3a4755, #242e38);
+    --dark-btn-hover: linear-gradient(180deg, #4a5a6a, #2f3b47);
+    --btn-bg: #ffffff;
+    --btn-hover: #eef3f8;
+    --sw-on: #16a34a;
+    --sw-off: #aab6c1;
+    --ring: rgba(37,99,235,.85);
+    --ring-soft: rgba(37,99,235,.22);
+    --num-bg: #dbe7fd;
+    --num-text: #1d4ed8;
+    --err-bg: #fde2e0;
+    --err-border: #dc2626;
+    --err-text: #7f1d1d;
+    --warn-bg: #fef0c7;
+    --warn-border: #d97706;
+    --warn-text: #78350f;
+    --menu-bg: #ffffff;
+    --menu-solid: #ffffff;
+    --menu-hover: #eaf0f6;
+    --desk: linear-gradient(180deg, #b9c5cf, #a4b1bd);
+    --r-panel: 12px;
+    --r-card: 8px;
+    --r-ctl: 7px;
+    --r-btn: 8px;
+    --r-seg: 9px;
+  }
+  html[data-theme="classroom"][data-mode="dark"] {
+    --page-base: #2a4338;
+    --bg-fill: radial-gradient(ellipse at 50% 30%, rgba(255,255,255,.07), transparent 60%), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27500%27%20height%3D%27400%27%3E%3Cfilter%20id%3D%27c%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.006%200.03%27%20numOctaves%3D%274%27%20seed%3D%274%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20values%3D%270%200%200%200%201%20%200%200%200%200%201%20%200%200%200%200%201%20%200%200%200%200.4%20-0.14%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23c)%27%2F%3E%3C%2Fsvg%3E"), radial-gradient(40% 25% at 25% 70%, rgba(255,255,255,.05), transparent 70%), linear-gradient(160deg, #2f4a3e, #213629);
+    --text: #f3f0e4;
+    --muted: #c3cdbf;
+    --faint: #93a591;
+    --panel-bg: linear-gradient(180deg, #2c453a, #233a2f);
+    --panel-border: #b98a4e;
+    --panel-shadow: inset 0 0 0 1px rgba(255,255,255,.08), inset 0 0 28px rgba(0,0,0,.28), 0 3px 0 #6d4a22, 0 14px 26px rgba(0,0,0,.5);
+    --hdr-bg: linear-gradient(180deg, #8c6236, #6a4623);
+    --hdr-border: #3d2711;
+    --hdr-text: #fdf1d8;
+    --hdr-muted: #e0c79c;
+    --inset-bg: rgba(0,0,0,.26);
+    --inset-border: rgba(255,255,255,.28);
+    --inset-shadow: inset 0 1px 4px rgba(0,0,0,.4);
+    --chip-bg: rgba(255,255,255,.05);
+    --seg-bg: rgba(0,0,0,.38);
+    --seg-text: #e6e2d0;
+    --seg-on-bg: #f3f0e4;
+    --seg-on-text: #1f3329;
+    --seg-on-shadow: 0 2px 4px rgba(0,0,0,.4);
+    --accent: #f2cf66;
+    --accent-hi: #f8e19b;
+    --on-accent: #2b2205;
+    --accent-glow: rgba(0,0,0,.4);
+    --dark-btn: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.08));
+    --dark-btn-hover: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.14));
+    --btn-bg: rgba(255,255,255,.08);
+    --btn-hover: rgba(255,255,255,.17);
+    --sw-on: #7fd6a0;
+    --sw-off: rgba(255,255,255,.22);
+    --ring: rgba(242,207,102,.9);
+    --ring-soft: rgba(242,207,102,.25);
+    --num-bg: rgba(242,207,102,.2);
+    --num-text: #f2cf66;
+    --err-bg: rgba(255,120,100,.2);
+    --err-border: rgba(255,120,100,.5);
+    --err-text: #ffc2b8;
+    --warn-bg: rgba(242,207,102,.2);
+    --warn-border: rgba(242,207,102,.5);
+    --warn-text: #f7e3a0;
+    --menu-bg: #26382f;
+    --menu-solid: #26382f;
+    --menu-hover: #35503f;
+    --desk: linear-gradient(180deg, #1a2b22, #12201a);
+    --r-panel: 10px;
+    --r-card: 8px;
+    --r-ctl: 7px;
+    --r-btn: 8px;
+    --r-seg: 9px;
+  }
+  html[data-theme="original"][data-mode="dark"] {
+    --page-base: #0b1220;
+    --bg-fill: #0b1220;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --panel-bg: #1e293b;
+    --panel-border: #334155;
+    --panel-shadow: 0 1px 2px rgba(0,0,0,.4);
+    --hdr-bg: #111b30;
+    --hdr-border: #334155;
+    --hdr-text: #f1f5f9;
+    --hdr-muted: #94a3b8;
+    --inset-bg: #0f172a;
+    --inset-border: #475569;
+    --inset-shadow: none;
+    --chip-bg: rgba(15,23,42,.55);
+    --seg-bg: #0f172a;
+    --seg-text: #cbd5e1;
+    --seg-on-bg: #4f46e5;
+    --seg-on-text: #fff;
+    --seg-on-shadow: none;
+    --accent: #6366f1;
+    --accent-hi: #6366f1;
+    --on-accent: #fff;
+    --accent-glow: transparent;
+    --dark-btn: #334155;
+    --dark-btn-hover: #475569;
+    --btn-bg: #1e293b;
+    --btn-hover: #334155;
+    --sw-on: #6366f1;
+    --sw-off: #475569;
+    --ring: #818cf8;
+    --ring-soft: rgba(129,140,248,.3);
+    --num-bg: rgba(99,102,241,.25);
+    --num-text: #c7d2fe;
+    --err-bg: rgba(239,68,68,.15);
+    --err-border: rgba(248,113,113,.4);
+    --err-text: #fecaca;
+    --warn-bg: rgba(245,158,11,.15);
+    --warn-border: rgba(251,191,36,.4);
+    --warn-text: #fde68a;
+    --menu-bg: #1e293b;
+    --menu-solid: #1e293b;
+    --menu-hover: #334155;
+    --desk: #334155;
+    --r-panel: 16px;
+    --r-card: 12px;
+    --r-ctl: 8px;
+    --r-btn: 8px;
+    --r-seg: 12px;
+  }
+  .sw-glass { background: radial-gradient(70% 70% at 15% 15%, #ff9bd0, transparent 70%), radial-gradient(70% 70% at 90% 20%, #6fb1ff, transparent 70%), radial-gradient(70% 70% at 70% 100%, #ffd08a, transparent 70%), #eef3ff; --sw-panel: rgba(255,255,255,.72); --sw-acc: #0a7cff; }
+  html[data-mode="dark"] .sw-glass { background: radial-gradient(70% 70% at 15% 15%, #6a3cff, transparent 70%), radial-gradient(70% 70% at 90% 20%, #0a84ff, transparent 70%), radial-gradient(70% 70% at 70% 100%, #14b8a6, transparent 70%), #0a0e24; --sw-panel: rgba(255,255,255,.2); --sw-acc: #0a84ff; }
+  .sw-aurora { background: radial-gradient(70% 70% at 15% 15%, #5eead4, transparent 70%), radial-gradient(70% 70% at 90% 20%, #a78bfa, transparent 70%), radial-gradient(70% 70% at 70% 100%, #7dd3fc, transparent 70%), #e9fbf6; --sw-panel: rgba(255,255,255,.72); --sw-acc: #0f766e; }
+  html[data-mode="dark"] .sw-aurora { background: radial-gradient(70% 70% at 15% 15%, #14b8a6, transparent 70%), radial-gradient(70% 70% at 90% 20%, #8b5cf6, transparent 70%), radial-gradient(70% 70% at 70% 100%, #34d399, transparent 70%), #041419; --sw-panel: rgba(255,255,255,.2); --sw-acc: #2dd4bf; }
+  .sw-sunset { background: radial-gradient(70% 70% at 15% 15%, #ff9966, transparent 70%), radial-gradient(70% 70% at 90% 20%, #ff5e8a, transparent 70%), radial-gradient(70% 70% at 70% 100%, #c79bff, transparent 70%), #fff3ea; --sw-panel: rgba(255,255,255,.72); --sw-acc: #d9441f; }
+  html[data-mode="dark"] .sw-sunset { background: radial-gradient(70% 70% at 15% 15%, #ff5e62, transparent 70%), radial-gradient(70% 70% at 90% 20%, #8e2de2, transparent 70%), radial-gradient(70% 70% at 70% 100%, #ff9966, transparent 70%), #1a0b1c; --sw-panel: rgba(255,255,255,.2); --sw-acc: #ff7a59; }
+  .sw-wood { background: repeating-linear-gradient(90deg, #b07a43 0 9px, #8f5f2f 9px 10px, #a8713c 10px 19px, #7a4e24 19px 20px); --sw-panel: #f3e5c8; --sw-acc: #9a5520; }
+  html[data-mode="dark"] .sw-wood { background: repeating-linear-gradient(90deg, #5a3b20 0 9px, #3d2713 9px 10px, #4f3319 10px 19px, #33200f 19px 20px); --sw-panel: #4b3320; --sw-acc: #e0a25c; }
+  .sw-stone { background: linear-gradient(#2a2d30 0 2px, transparent 2px) 0 0/100% 19px, linear-gradient(90deg, #2a2d30 0 2px, transparent 2px) 0 0/19px 100%, #7b8187; --sw-panel: #e4e2dc; --sw-acc: #3f6b5e; }
+  html[data-mode="dark"] .sw-stone { background: linear-gradient(#0c0e10 0 2px, transparent 2px) 0 0/100% 19px, linear-gradient(90deg, #0c0e10 0 2px, transparent 2px) 0 0/19px 100%, #3f444a; --sw-panel: #3d4247; --sw-acc: #93cbb9; }
+  .sw-classroom { background: linear-gradient(rgba(70,110,150,.28) 1px, transparent 1px) 0 0/10px 10px, linear-gradient(90deg, rgba(70,110,150,.28) 1px, transparent 1px) 0 0/10px 10px, #eef3f7; --sw-panel: #fff; --sw-acc: #2563eb; }
+  html[data-mode="dark"] .sw-classroom { background: radial-gradient(60% 60% at 30% 30%, rgba(255,255,255,.14), transparent 70%), #2f4a3e; --sw-panel: #26382f; --sw-acc: #f2cf66; box-shadow: inset 0 0 0 3px #a8793f, 0 2px 6px rgba(0,0,0,.14); }
+  .sw-original { background: linear-gradient(180deg, #f1f5f9, #e2e8f0); --sw-panel: #fff; --sw-acc: #4f46e5; }
+  html[data-mode="dark"] .sw-original { background: #0f172a; --sw-panel: #1e293b; --sw-acc: #6366f1; }
+
+  /* ---------- Layout density tiers (auto-fit to one page) ---------- */
+
+  #sheet.d1 .sheet-title { font-size: 36px; margin: 12px 0 14px; }
+  #sheet.d1 .sheet-sub, #sheet.d1 .sheet-instr { font-size: 12.6px; margin-bottom: 12px; }
+  #sheet.d1 .clue-cols, #sheet.d1 .wb-wrap, #sheet.d1 .sc-wrap, #sheet.d1 .m-cols { font-size: 12.6px; }
+  #sheet.d1 .m-row { font-size: 13px; line-height: 18px; }
+  #sheet.d1 .clue-item, #sheet.d1 .wb-clue, #sheet.d1 .m-item { margin-bottom: 7px; }
+  #sheet.d1 .sc-row { margin-bottom: 12px; }
+  #sheet.d1 .sc-scr { font-size: 14.5px; }
+  #sheet.d1 .fb-list { font-size: 14px; }
+  #sheet.d1 .fb-item { margin-bottom: 9px; line-height: 2; }
+  #sheet.d1 .fb-bank { margin-bottom: 20px; padding: 8px 12px 6px; }
+  #sheet.d1 .fb-w { font-size: 14px; margin: 2px 8px; }
+  #sheet.d1 .grid-wrap { margin: 4px 0 20px; }
+  #sheet.d1 .sheet-footer { margin-top: 18px; padding-top: 6px; }
+  #sheet.d1 .sheet-header { font-size: 13.5px; }
+
+  #sheet.d2 .sheet-title { font-size: 31px; margin: 8px 0 10px; }
+  #sheet.d2 .sheet-sub, #sheet.d2 .sheet-instr { font-size: 11.9px; margin-bottom: 9px; }
+  #sheet.d2 .clue-cols, #sheet.d2 .wb-wrap, #sheet.d2 .sc-wrap, #sheet.d2 .m-cols { font-size: 11.9px; }
+  #sheet.d2 .m-row { font-size: 12.3px; line-height: 17px; }
+  #sheet.d2 .clue-item, #sheet.d2 .wb-clue, #sheet.d2 .m-item { margin-bottom: 5px; }
+  #sheet.d2 .sc-row { margin-bottom: 9px; }
+  #sheet.d2 .sc-scr { font-size: 14px; }
+  #sheet.d2 .fb-list { font-size: 13px; }
+  #sheet.d2 .fb-item { margin-bottom: 6px; line-height: 1.9; }
+  #sheet.d2 .fb-bank { margin-bottom: 14px; padding: 8px 12px 6px; }
+  #sheet.d2 .fb-w { font-size: 13px; margin: 2px 8px; }
+  #sheet.d2 .grid-wrap { margin: 4px 0 14px; }
+  #sheet.d2 .sheet-footer { margin-top: 14px; padding-top: 6px; }
+  #sheet.d2 .sheet-header { font-size: 13px; }
+
+  #sheet.d3 .sheet-title { font-size: 27px; margin: 6px 0 8px; }
+  #sheet.d3 .sheet-sub, #sheet.d3 .sheet-instr { font-size: 11.2px; margin-bottom: 7px; }
+  #sheet.d3 .clue-cols, #sheet.d3 .wb-wrap, #sheet.d3 .sc-wrap, #sheet.d3 .m-cols { font-size: 11.2px; }
+  #sheet.d3 .m-row { font-size: 11.6px; line-height: 16px; }
+  #sheet.d3 .clue-item, #sheet.d3 .wb-clue, #sheet.d3 .m-item { margin-bottom: 4px; }
+  #sheet.d3 .sc-row { margin-bottom: 7px; }
+  #sheet.d3 .sc-scr { font-size: 13.5px; }
+  #sheet.d3 .fb-list { font-size: 12px; }
+  #sheet.d3 .fb-item { margin-bottom: 4px; line-height: 1.8; }
+  #sheet.d3 .fb-bank { margin-bottom: 10px; padding: 8px 12px 6px; }
+  #sheet.d3 .fb-w { font-size: 12px; margin: 2px 8px; }
+  #sheet.d3 .grid-wrap { margin: 4px 0 10px; }
+  #sheet.d3 .sheet-footer { margin-top: 10px; padding-top: 6px; }
+  #sheet.d3 .sheet-header { font-size: 12.5px; }
+</style>
+<script>
+/* Theme + mode engine. Runs before first paint so there is no flash.
+   Theme (look) and mode (light / dark / auto) are independent; both are remembered. */
+(function () {
+  var FAM = { glass: 'glass', aurora: 'glass', sunset: 'glass', wood: 'material', stone: 'material', classroom: 'material', original: '' };
+  var K_T = 'worksheetStudio.theme', K_M = 'worksheetStudio.mode';
+  var mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  var st = { theme: 'glass', pref: 'auto' }, subs = [];
+  try {
+    var t = localStorage.getItem(K_T), m = localStorage.getItem(K_M);
+    if (t === 'midnight') { t = 'glass'; if (!m) m = 'dark'; }       // migrate the earlier dark glass theme
+    if (t && t in FAM) st.theme = t;
+    if (m === 'light' || m === 'dark' || m === 'auto') st.pref = m;
+  } catch (e) {}
+  function resolved() { return st.pref === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : st.pref; }
+  function apply() {
+    var r = document.documentElement, m = resolved(), f = FAM[st.theme];
+    if (st.theme === 'original' && m === 'dark') f = 'flat';         // Classic keeps its exact original look in light mode
+    r.setAttribute('data-theme', st.theme); r.setAttribute('data-mode', m);
+    if (f) r.setAttribute('data-fam', f); else r.removeAttribute('data-fam');
+    subs.forEach(function (fn) { try { fn(api.state()); } catch (e) {} });
+  }
+  function put(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  var api = window.WS_THEME = {
+    state: function () { return { theme: st.theme, pref: st.pref, mode: resolved() }; },
+    setTheme: function (id) { if (id in FAM) { st.theme = id; put(K_T, id); apply(); } },
+    setMode: function (p) { if (p === 'light' || p === 'dark' || p === 'auto') { st.pref = p; put(K_M, p); apply(); } },
+    toggleMode: function () { api.setMode(resolved() === 'dark' ? 'light' : 'dark'); },
+    onChange: function (fn) { subs.push(fn); }
+  };
+  if (mq) { var h = function () { if (st.pref === 'auto') apply(); }; mq.addEventListener ? mq.addEventListener('change', h) : mq.addListener(h); }
+  apply();
+})();
+</script>
+</head>
+
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<div id="themeBg" class="no-print" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<!-- ===================== App header & navigation ===================== -->
+<header class="no-print bg-white border-b border-slate-200 sticky top-0 z-20">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white grid place-items-center font-bold text-lg">✎</div>
+      <div>
+        <h1 class="text-lg font-bold leading-tight">Worksheet Studio</h1>
+        <p class="text-xs text-slate-500">Crosswords, matching, word searches &amp; fill-in-the-blanks — create, print &amp; download</p>
+      </div>
+    </div>
+    <nav class="seg flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full" role="tablist"><span class="seg-thumb" aria-hidden="true"></span>
+      <button id="tab-cw" class="tab-btn whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition" role="tab" aria-selected="true">Crossword</button>
+      <button id="tab-mt" class="tab-btn whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition" role="tab" aria-selected="false">Matching</button>
+      <button id="tab-ws" class="tab-btn whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition" role="tab" aria-selected="false">Word Search</button>
+      <button id="tab-fb" class="tab-btn whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition" role="tab" aria-selected="false">Fill Blanks</button>
+      <button id="tab-preview" class="tab-btn whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition" role="tab" aria-selected="false">Preview &amp; Print</button>
+    </nav>
+    <div class="no-print" id="themeWrap">
+      <button id="modeBtn" type="button" class="theme-btn" aria-pressed="false"></button>
+      <button id="themeBtn" type="button" class="theme-btn" title="Change theme" aria-label="Change theme" aria-haspopup="dialog" aria-expanded="false" aria-controls="themeMenu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- ===================== Shared sheet settings ===================== -->
+  <div class="no-print bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+    <h2 class="text-base font-bold mb-3">Sheet settings <span class="text-xs font-normal text-slate-500">(apply to every worksheet)</span></h2>
+    <div class="grid gap-4 md:grid-cols-12 items-end">
+      <div class="md:col-span-5">
+        <label class="block text-xs font-semibold text-slate-600 mb-1" for="shCreator">Created by / Designer</label>
+        <input id="shCreator" type="text" placeholder="e.g. Ms. Karimova (leave empty to hide the footer)"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div class="md:col-span-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <label class="flex items-center gap-3 text-sm cursor-pointer">
+          <span class="switch"><input type="checkbox" id="shName"><span class="slider"></span></span> “Name:” line
+        </label>
+        <label class="flex items-center gap-3 text-sm cursor-pointer">
+          <span class="switch"><input type="checkbox" id="shDate"><span class="slider"></span></span> “Date:” line
+        </label>
+        <label class="flex items-center gap-3 text-sm cursor-pointer" title="Automatically tightens spacing so the worksheet fits one page">
+          <span class="switch"><input type="checkbox" id="shFit"><span class="slider"></span></span> Auto-fit to one page
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          Page size
+          <select id="shPage" class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+            <option value="letter">US Letter</option>
+            <option value="a4">A4</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== VIEW: CROSSWORD ===================== -->
+  <section id="view-cw" class="view space-y-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-base font-bold mb-4">Crossword settings</h2>
+      <div class="grid gap-4 md:grid-cols-12">
+        <div class="md:col-span-8">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="cwTitle">Crossword title</label>
+          <input id="cwTitle" type="text" placeholder="e.g. Board Games"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="md:col-span-4 flex items-end">
+          <label class="flex items-center gap-3 text-sm cursor-pointer">
+            <span class="switch"><input type="checkbox" id="cwCounts"><span class="slider"></span></span>
+            Show letter counts, e.g. (5)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-base font-bold">Questions &amp; answers <span id="count-cw" class="ml-1 text-xs font-semibold text-slate-500"></span></h2>
+          <p class="text-xs text-slate-500 mt-0.5">Spaces and punctuation in answers are removed automatically (“Ice Cream” → ICECREAM).</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button data-act="sample" data-t="cw" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50">Load sample</button>
+          <button data-act="clear" data-t="cw" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700">Clear all</button>
+        </div>
+      </div>
+      <div id="list-cw" class="space-y-3"></div>
+      <div class="mt-4"><button data-act="add" data-t="cw" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">+ Add Question</button></div>
+      <details class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <summary class="cursor-pointer text-sm font-semibold">Bulk import (paste many at once)</summary>
+        <p class="text-xs text-slate-500 mt-2 mb-2">One entry per line: <code class="bg-white border rounded px-1">clue | answer | optional hint</code></p>
+        <textarea id="bulk-cw" rows="5" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                  placeholder="Capital of France | Paris | Geography&#10;Opposite of hot | Cold"></textarea>
+        <button data-act="bulk" data-t="cw" class="mt-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm hover:bg-slate-100">Add these lines</button>
+      </details>
+    </div>
+
+    <div id="msg-cw" class="space-y-3"></div>
+    <div class="sticky bottom-4 z-10">
+      <button data-act="gen" data-t="cw" class="w-full md:w-auto md:min-w-[320px] mx-auto block px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold shadow-lg shadow-indigo-300/50 transition">✨ Generate Crossword</button>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW: MATCHING ===================== -->
+  <section id="view-mt" class="view hidden space-y-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-base font-bold mb-4">Matching task settings</h2>
+      <div class="grid gap-4 md:grid-cols-12">
+        <div class="md:col-span-8">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="mtTitle">Task title</label>
+          <input id="mtTitle" type="text" placeholder="e.g. Parts of Speech"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="mtStyle">Matching style</label>
+          <select id="mtStyle" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="line">Line matching (draw connecting lines)</option>
+            <option value="letter">Letter matching [ ___ ]</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-base font-bold">Pairs <span id="count-mt" class="ml-1 text-xs font-semibold text-slate-500"></span></h2>
+          <p class="text-xs text-slate-500 mt-0.5">Column A keeps the order shown here (use ▲▼ to reorder). Column B is shuffled and lettered automatically. Up to 26 pairs; about 8–12 fit nicely on one page.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button data-act="sample" data-t="mt" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50">Load sample</button>
+          <button data-act="clear" data-t="mt" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700">Clear all</button>
+        </div>
+      </div>
+      <div id="list-mt" class="space-y-3"></div>
+      <div class="mt-4"><button data-act="add" data-t="mt" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">+ Add Pair</button></div>
+      <details class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <summary class="cursor-pointer text-sm font-semibold">Bulk import (paste many at once)</summary>
+        <p class="text-xs text-slate-500 mt-2 mb-2">One pair per line: <code class="bg-white border rounded px-1">Term | Definition</code> or <code class="bg-white border rounded px-1">Question | Answer</code></p>
+        <textarea id="bulk-mt" rows="5" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                  placeholder="Noun | A person, place or thing&#10;Verb | An action word"></textarea>
+        <button data-act="bulk" data-t="mt" class="mt-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm hover:bg-slate-100">Add these lines</button>
+      </details>
+    </div>
+
+    <div id="msg-mt" class="space-y-3"></div>
+    <div class="sticky bottom-4 z-10">
+      <button data-act="gen" data-t="mt" class="w-full md:w-auto md:min-w-[320px] mx-auto block px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold shadow-lg shadow-indigo-300/50 transition">✨ Generate Matching Task</button>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW: WORD SEARCH / SCRAMBLE ===================== -->
+  <section id="view-ws" class="view hidden space-y-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-base font-bold mb-4">Word Search &amp; Scramble settings</h2>
+      <div class="grid gap-4 md:grid-cols-12">
+        <div class="md:col-span-6">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="wsTitle">Worksheet title</label>
+          <input id="wsTitle" type="text" placeholder="e.g. Animal Word Search"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="md:col-span-6">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="wsTheme">Category / theme <span class="font-normal text-slate-400">(optional)</span></label>
+          <input id="wsTheme" type="text" placeholder="e.g. Animals"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="wsMode">Activity</label>
+          <select id="wsMode" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="search">Word Search</option>
+            <option value="scramble">Word Scramble</option>
+          </select>
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="wsSize">Grid size <span class="font-normal text-slate-400">(word search)</span></label>
+          <select id="wsSize" data-num="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="8">8 × 8</option><option value="10">10 × 10</option><option value="12">12 × 12</option>
+            <option value="15">15 × 15</option><option value="18">18 × 18</option><option value="20">20 × 20</option>
+          </select>
+        </div>
+        <div class="md:col-span-4 flex flex-col justify-end gap-3">
+          <label class="flex items-center gap-3 text-sm cursor-pointer">
+            <span class="switch"><input type="checkbox" id="wsClue"><span class="slider"></span></span> Show clues instead of word list
+          </label>
+        </div>
+        <div class="md:col-span-12 flex flex-wrap gap-x-8 gap-y-3">
+          <label class="flex items-center gap-3 text-sm cursor-pointer">
+            <span class="switch"><input type="checkbox" id="wsDiag"><span class="slider"></span></span> Diagonal words
+          </label>
+          <label class="flex items-center gap-3 text-sm cursor-pointer">
+            <span class="switch"><input type="checkbox" id="wsBack"><span class="slider"></span></span> Backwards words
+          </label>
+          <p class="text-xs text-slate-500 self-center">Grid size, diagonal and backwards apply when you press Generate. Activity, clues and answer key update instantly.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-base font-bold">Words <span id="count-ws" class="ml-1 text-xs font-semibold text-slate-500"></span></h2>
+          <p class="text-xs text-slate-500 mt-0.5">Clues are optional — they are used when “Show clues” is on (and shown beside scrambled words).</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button data-act="sample" data-t="ws" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50">Load sample</button>
+          <button data-act="clear" data-t="ws" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700">Clear all</button>
+        </div>
+      </div>
+      <div id="list-ws" class="space-y-3"></div>
+      <div class="mt-4"><button data-act="add" data-t="ws" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">+ Add Word</button></div>
+      <details class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <summary class="cursor-pointer text-sm font-semibold">Bulk import (paste many at once)</summary>
+        <p class="text-xs text-slate-500 mt-2 mb-2">One word per line: <code class="bg-white border rounded px-1">word | optional clue</code></p>
+        <textarea id="bulk-ws" rows="5" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                  placeholder="Elephant | Largest land animal&#10;Zebra"></textarea>
+        <button data-act="bulk" data-t="ws" class="mt-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm hover:bg-slate-100">Add these lines</button>
+      </details>
+    </div>
+
+    <div id="msg-ws" class="space-y-3"></div>
+    <div class="sticky bottom-4 z-10">
+      <button data-act="gen" data-t="ws" class="w-full md:w-auto md:min-w-[320px] mx-auto block px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold shadow-lg shadow-indigo-300/50 transition">✨ Generate Worksheet</button>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW: FILL IN THE BLANKS ===================== -->
+  <section id="view-fb" class="view hidden space-y-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-base font-bold mb-4">Fill in the Blanks settings</h2>
+      <div class="grid gap-4 md:grid-cols-12">
+        <div class="md:col-span-12">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="fbTitle">Worksheet title</label>
+          <input id="fbTitle" type="text" placeholder="e.g. Science Review"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="fbBlank">Blank length</label>
+          <select id="fbBlank" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="fit">Match the answer length</option>
+            <option value="uniform">Same length for every blank</option>
+          </select>
+        </div>
+        <div class="md:col-span-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1" for="fbHint">Hint on each blank</label>
+          <select id="fbHint" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="none">No hint</option>
+            <option value="first">First letter</option>
+            <option value="count">Letter count, e.g. (5)</option>
+          </select>
+        </div>
+        <div class="md:col-span-4 flex items-end">
+          <label class="flex items-center gap-3 text-sm cursor-pointer">
+            <span class="switch"><input type="checkbox" id="fbBank"><span class="slider"></span></span> Show word bank
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-base font-bold">Sentences <span id="count-fb" class="ml-1 text-xs font-semibold text-slate-500"></span></h2>
+          <p class="text-xs text-slate-500 mt-0.5">Wrap each word to hide in <b>*asterisks*</b>, e.g. “The *sun* rises in the east.” A sentence can have several blanks.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button data-act="sample" data-t="fb" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50">Load sample</button>
+          <button data-act="clear" data-t="fb" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-red-50 hover:border-red-300 hover:text-red-700">Clear all</button>
+        </div>
+      </div>
+      <div id="list-fb" class="space-y-3"></div>
+      <div class="mt-4"><button data-act="add" data-t="fb" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">+ Add Sentence</button></div>
+      <details class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <summary class="cursor-pointer text-sm font-semibold">Bulk import (paste many at once)</summary>
+        <p class="text-xs text-slate-500 mt-2 mb-2">One sentence per line, with the hidden words in asterisks.</p>
+        <textarea id="bulk-fb" rows="5" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                  placeholder="The *cat* sat on the *mat*.&#10;Water freezes at *0* degrees Celsius."></textarea>
+        <button data-act="bulk" data-t="fb" class="mt-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm hover:bg-slate-100">Add these lines</button>
+      </details>
+    </div>
+
+    <div id="msg-fb" class="space-y-3"></div>
+    <div class="sticky bottom-4 z-10">
+      <button data-act="gen" data-t="fb" class="w-full md:w-auto md:min-w-[320px] mx-auto block px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold shadow-lg shadow-indigo-300/50 transition">✨ Generate Worksheet</button>
+    </div>
+  </section>
+
+  <!-- ===================== VIEW: PREVIEW ===================== -->
+  <section id="view-preview" class="view hidden space-y-4">
+    <div class="no-print bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center gap-3 justify-between">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="seg flex gap-1 bg-slate-100 p-1 rounded-xl"><span class="seg-thumb" aria-hidden="true"></span>
+          <button data-pv="cw" class="tab-btn px-3 py-1.5 rounded-lg text-sm font-semibold" aria-selected="true">Crossword</button>
+          <button data-pv="mt" class="tab-btn px-3 py-1.5 rounded-lg text-sm font-semibold" aria-selected="false">Matching</button>
+          <button data-pv="ws" class="tab-btn px-3 py-1.5 rounded-lg text-sm font-semibold" aria-selected="false">Word Search</button>
+          <button data-pv="fb" class="tab-btn px-3 py-1.5 rounded-lg text-sm font-semibold" aria-selected="false">Fill Blanks</button>
+        </div>
+        <button id="btnBack" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50">← Edit task</button>
+        <button id="btnShuffle" class="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50" title="Regenerate with a different arrangement">🔀 New layout</button>
+        <label class="flex items-center gap-3 text-sm font-medium cursor-pointer ml-1">
+          <span class="switch"><input type="checkbox" id="optKey"><span class="slider"></span></span> Answer key
+        </label>
+        <span id="pageChip" class="page-chip" role="status" aria-live="polite"></span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnPrint" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">🖨 Print</button>
+        <button id="btnPdf" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">⬇ Download PDF</button>
+      </div>
+    </div>
+
+    <div id="previewWarn" class="no-print space-y-3"></div>
+
+    <div id="emptyState" class="no-print bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500"></div>
+
+    <div id="sheetCard" class="sheet-card hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div class="sheet-scroll overflow-x-auto">
+        <div id="sheetWrap"><div id="sheet"></div><div id="pageGuides" class="no-print" aria-hidden="true"></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="themeMenu" class="no-print" role="dialog" aria-label="Appearance"></div>
+
+<div id="toast" class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg opacity-0 pointer-events-none transition-opacity z-50"></div>
+
+<script>
+/* =====================================================================
+ *  Worksheet Studio – vanilla JS
+ *
+ *  0. Helpers
+ *  1. State & persistence
+ *  2. Entry-list UI (shared plumbing only – no task logic)
+ *  3. TASK MODULES (each isolated: generator + renderer)
+ *       3a. Crossword      – genCrossword()  / renderCrossword()
+ *       3b. Matching       – genMatching()   / renderMatching()
+ *       3c. Word Search    – genWordSearch() / renderWordSearch()
+ *  4. Unified sheet core (#sheet): header, title, footer, key mode
+ *  5. Views, print, PDF
+ * ===================================================================== */
+
+/* ---------------------------------------------------------------------
+ * 0. HELPERS
+ * ------------------------------------------------------------------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+/** Strip everything except letters/digits (any language) and uppercase it. */
+const clean = s => String(s || '').replace(/[^\p{L}\p{N}]/gu, '').toUpperCase();
+const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const key = (r, c) => r + ',' + c;
+/* Layout density (0 = roomy … 3 = compact); set by renderSheet() while fitting a page */
+let DENS = 0;
+const DK = [1, .93, .86, .8], LH = [19, 18, 17, 16], PERLINE = [27, 29, 31, 33];
+/** 0→A … 25→Z, 26→AA … */
+const label = i => (i >= 26 ? label(Math.floor(i / 26) - 1) : '') + String.fromCharCode(65 + (i % 26));
+const splitCols = (arr, n) => { const per = Math.ceil(arr.length / n) || 1, out = []; for (let i = 0; i < arr.length; i += per) out.push(arr.slice(i, i + per)); return out; };
+
+function msgBox(kind, title, lines) {
+  const styles = { error: 'bg-red-50 border-red-200 text-red-800', warn: 'bg-amber-50 border-amber-200 text-amber-900' }[kind];
+  return `<div class="rounded-xl border p-4 ${styles}">
+    <p class="font-semibold text-sm">${title}</p>
+    ${lines && lines.length ? `<ul class="list-disc pl-5 mt-1 text-sm space-y-0.5">${lines.map(l => `<li>${l}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.opacity = 0, 2600);
+}
+
+/* ---------------------------------------------------------------------
+ * 1. STATE & PERSISTENCE
+ * ------------------------------------------------------------------- */
+const STORE_KEY = 'worksheetStudio.v1';
+const OLD_KEY = 'crosswordStudio.v1';        // previous single-app key (migrated once)
+const TASKS = ['cw', 'mt', 'ws', 'fb'];
+const VIEWS = [...TASKS, 'preview'];
+
+const S = {
+  shared: { name: true, date: true, creator: '', page: 'letter', fit: true },
+  cw: { title: '', entries: [], nextId: 1, counts: false },                       // entries: {id, clue, answer, hint}
+  mt: { title: '', entries: [], nextId: 1, style: 'line' },                        // entries: {id, a, b}
+  ws: { title: '', theme: '', entries: [], nextId: 1, mode: 'search', clueMode: false,
+        size: 12, diag: true, back: true },
+  fb: { title: '', entries: [], nextId: 1, bank: true, hint: 'none', blank: 'fit' }   // entries: {id, text}                                         // entries: {id, word, clue}
+};
+const P = { cw: null, mt: null, ws: null, fb: null };   // last generated puzzle per task (independent)
+let activeTask = 'cw';
+
+const SAMPLE_CW = [
+  ['This game is played with royalty—kings, queens, knights, rooks and pawns', 'Chess', ''],
+  ['If you draw well, you and your partner could win this guessing game!', 'Pictionary', ''],
+  ['You sunk my "__________"!', 'Battleship', ''],
+  ['By the end of this game you have a career, a house and maybe even a family.', 'Life', ''],
+  ['King me!', 'Checkers', ''],
+  ['The object of the game is to occupy every territory on the board and, in doing so, eliminate the other players.', 'Risk', ''],
+  ['Long words get lots of points', 'Scrabble', ''],
+  ['When you have only one card left, shout "___"!', 'Uno', ''],
+  ['Do not pass "GO". Do not collect $200.', 'Monopoly', ''],
+  ["There's something for everyone in this popular party game: word puzzles, trivia, charades and Pictionary-like challenges.", 'Cranium', ''],
+  ['One wrong move and the tower can fall and you lose.', 'Jenga', ''],
+  ['Tangled limbs collapse in a heap when you touch the red, yellow, blue or green circles.', 'Twister', ''],
+];
+const SAMPLE_MT = [
+  ['Noun', 'A person, place or thing'], ['Verb', 'An action or state of being'],
+  ['Adjective', 'A word that describes a noun'], ['Adverb', 'A word that describes a verb'],
+  ['Pronoun', 'A word that takes the place of a noun'], ['Preposition', 'Shows a relationship in time or place'],
+  ['Conjunction', 'A word that joins words or sentences'], ['Interjection', 'A word that expresses sudden emotion'],
+];
+const SAMPLE_WS = [
+  ['Elephant', 'Largest land animal'], ['Giraffe', 'Has a very long neck'], ['Zebra', 'Striped, horse-like animal'],
+  ['Lion', 'King of the jungle'], ['Penguin', 'Flightless bird that lives in Antarctica'],
+  ['Dolphin', 'Clever marine mammal'], ['Kangaroo', 'Hops and carries its baby in a pouch'],
+  ['Tiger', 'Large cat with stripes'], ['Monkey', 'Swings through trees and loves bananas'],
+  ['Panda', 'Black-and-white bear that eats bamboo'],
+];
+const SAMPLE_FB = [
+  "A *noun* is a word that names a person, place or thing.",
+  "The *sun* rises in the east and sets in the west.",
+  "Plants make their own food through *photosynthesis*.",
+  "Water boils at *100* degrees Celsius.",
+  "The capital of France is *Paris*.",
+  "A *triangle* has three sides and three angles.",
+  "Birds build *nests* to protect their eggs.",
+  "We use a *thermometer* to measure temperature."
+];
+const SAMPLES = {
+  fb() { const s = S.fb; s.entries = []; s.nextId = 1; SAMPLE_FB.forEach(t => s.entries.push({ id: s.nextId++, text: t })); s.title = 'Fill in the Blanks'; },
+  cw() { const s = S.cw; s.entries = []; s.nextId = 1; SAMPLE_CW.forEach(([clue, answer, hint]) => s.entries.push({ id: s.nextId++, clue, answer, hint })); s.title = 'Board Games'; },
+  mt() { const s = S.mt; s.entries = []; s.nextId = 1; SAMPLE_MT.forEach(([a, b]) => s.entries.push({ id: s.nextId++, a, b })); s.title = 'Parts of Speech'; },
+  ws() { const s = S.ws; s.entries = []; s.nextId = 1; SAMPLE_WS.forEach(([word, clue]) => s.entries.push({ id: s.nextId++, word, clue })); s.title = 'Animal Word Search'; s.theme = 'Animals'; }
+};
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ shared: S.shared, cw: S.cw, mt: S.mt, ws: S.ws, fb: S.fb })); } catch (e) { /* storage unavailable */ }
+}
+function load() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) {}
+  if (d) {
+    ['shared', 'cw', 'mt', 'ws', 'fb'].forEach(k => { if (d[k] && typeof d[k] === 'object') Object.assign(S[k], d[k]); });
+  } else {
+    try {   // migrate the old Crossword Studio data
+      const o = JSON.parse(localStorage.getItem(OLD_KEY) || 'null');
+      if (o && Array.isArray(o.entries) && o.entries.length) {
+        S.cw.entries = o.entries; S.cw.nextId = o.nextId || o.entries.length + 1;
+        S.cw.title = o.title || ''; S.cw.counts = !!o.counts;
+        S.shared.name = o.name !== false; S.shared.date = o.date !== false; S.shared.page = o.page || 'letter';
+      }
+    } catch (e) {}
+  }
+  TASKS.forEach(t => { if (!Array.isArray(S[t].entries) || !S[t].entries.length) SAMPLES[t](); });
+}
+
+/* Two-way binding between simple inputs and the state object */
+const BINDS = [];
+function bind(id, obj, prop) {
+  const el = $(id), ck = el.type === 'checkbox';
+  BINDS.push({ el, obj, prop, ck });
+  el.addEventListener('input', () => {
+    let v = ck ? el.checked : el.value;
+    if (el.dataset.num) v = +v;
+    obj[prop] = v; save(); renderSheet();
+  });
+}
+function syncInputs() { BINDS.forEach(b => { if (b.ck) b.el.checked = !!b.obj[b.prop]; else b.el.value = b.obj[b.prop]; }); }
+
+/* ---------------------------------------------------------------------
+ * 2. ENTRY-LIST UI  (generic plumbing; row templates per task)
+ * ------------------------------------------------------------------- */
+const countText = ans => { const c = clean(ans); return c ? `${c.length} letters → <b>${esc(c)}</b>` : 'No answer yet'; };
+const INP = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
+const LBL = 'block text-xs font-semibold text-slate-600 mb-1';
+
+const ROWS = {
+  fb: e => `
+    <div class="md:col-span-12"><label class="${LBL}">Sentence <span class="font-normal text-slate-400">— wrap each hidden word in *asterisks*</span></label>
+      <textarea data-f="text" rows="2" placeholder="The *cat* sat on the *mat*." class="${INP}">${esc(e.text)}</textarea>
+      <p class="count text-xs text-slate-500 mt-1">${fbInfo(e.text)}</p></div>`,
+  cw: e => `
+    <div class="md:col-span-6"><label class="${LBL}">Question / Clue</label>
+      <textarea data-f="clue" rows="2" placeholder="Type the clue students will read…" class="${INP}">${esc(e.clue)}</textarea></div>
+    <div class="md:col-span-3"><label class="${LBL}">Answer</label>
+      <input data-f="answer" type="text" value="${esc(e.answer)}" placeholder="e.g. Monopoly" class="${INP} uppercase">
+      <p class="count text-xs text-slate-500 mt-1">${countText(e.answer)}</p></div>
+    <div class="md:col-span-3"><label class="${LBL}">Hint / category <span class="font-normal text-slate-400">(optional)</span></label>
+      <input data-f="hint" type="text" value="${esc(e.hint || '')}" placeholder="e.g. Strategy" class="${INP}"></div>`,
+  mt: e => `
+    <div class="md:col-span-6"><label class="${LBL}">Column A (prompt)</label>
+      <textarea data-f="a" rows="2" placeholder="Term or question…" class="${INP}">${esc(e.a)}</textarea></div>
+    <div class="md:col-span-6"><label class="${LBL}">Column B (match)</label>
+      <textarea data-f="b" rows="2" placeholder="Definition or answer…" class="${INP}">${esc(e.b)}</textarea></div>`,
+  ws: e => `
+    <div class="md:col-span-4"><label class="${LBL}">Word</label>
+      <input data-f="word" type="text" value="${esc(e.word)}" placeholder="e.g. Elephant" class="${INP} uppercase">
+      <p class="count text-xs text-slate-500 mt-1">${countText(e.word)}</p></div>
+    <div class="md:col-span-8"><label class="${LBL}">Clue / definition <span class="font-normal text-slate-400">(optional)</span></label>
+      <input data-f="clue" type="text" value="${esc(e.clue || '')}" placeholder="Largest land animal" class="${INP}"></div>`
+};
+
+function renderEntries(t) {
+  const list = S[t].entries, move = t === 'mt';
+  $('list-' + t).innerHTML = list.map((e, i) => `
+    <div class="entry rounded-xl border border-slate-200 bg-slate-50/60 p-4" data-t="${t}" data-id="${e.id}">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 shrink-0 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-sm font-bold">${i + 1}</div>
+        <div class="flex-1 grid gap-3 md:grid-cols-12">${ROWS[t](e)}</div>
+        ${move ? `<div class="shrink-0 flex flex-col gap-1">
+          <button data-act="up" title="Move up" class="w-9 h-4 leading-none text-xs rounded border border-slate-300 bg-white text-slate-500 hover:bg-slate-100">▲</button>
+          <button data-act="down" title="Move down" class="w-9 h-4 leading-none text-xs rounded border border-slate-300 bg-white text-slate-500 hover:bg-slate-100">▼</button></div>` : ''}
+        <button data-act="del" title="Delete" class="shrink-0 w-9 h-9 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300">✕</button>
+      </div>
+    </div>`).join('');
+  $('count-' + t).textContent = `(${list.length})`;
+}
+const BLANK = { fb: () => ({ text: '' }), cw: () => ({ clue: '', answer: '', hint: '' }), mt: () => ({ a: '', b: '' }), ws: () => ({ word: '', clue: '' }) };
+function addEntry(t, data, focus = true) {
+  S[t].entries.push({ id: S[t].nextId++, ...(data || BLANK[t]()) });
+  renderEntries(t); save();
+  if (focus) { const last = $('list-' + t).lastElementChild; last && last.querySelector('textarea,input').focus(); }
+}
+const BULK = {   // parse one bulk line -> entry data (or null)
+  fb: p => { const t = p.join(' | ').trim(); return t ? { text: t } : null; },
+  cw: p => p[0] && p[1] ? { clue: p[0], answer: p[1], hint: p[2] || '' } : null,
+  mt: p => p[0] && p[1] ? { a: p[0], b: p.slice(1).join(' | ') } : null,
+  ws: p => p[0] ? { word: p[0], clue: p.slice(1).join(' | ') } : null
+};
+const isBlankEntry = e => Object.entries(e).every(([k, v]) => k === 'id' || !String(v).trim());
+
+document.addEventListener('input', ev => {
+  const row = ev.target.closest && ev.target.closest('.entry'); if (!row) return;
+  const t = row.dataset.t, e = S[t].entries.find(x => x.id === +row.dataset.id), f = ev.target.dataset.f;
+  if (!e || !f) return;
+  e[f] = ev.target.value;
+  const c = row.querySelector('.count');
+  if (c && (f === 'answer' || f === 'word')) c.innerHTML = countText(e[f]);
+  else if (c && f === 'text') c.innerHTML = fbInfo(e.text);
+  save();
+});
+
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('[data-act]'); if (!btn) return;
+  const row = btn.closest('.entry'), t = btn.dataset.t || (row && row.dataset.t), act = btn.dataset.act;
+  if (!t) return;
+  const s = S[t];
+  if (act === 'add') addEntry(t);
+  else if (act === 'gen') generate(t);
+  else if (act === 'sample') {
+    if (s.entries.some(e => !isBlankEntry(e)) && !confirm('Replace the current entries with the sample?')) return;
+    SAMPLES[t](); syncInputs(); renderEntries(t); save(); toast('Sample loaded');
+  } else if (act === 'clear') {
+    if (!confirm('Delete all entries?')) return;
+    s.entries = []; renderEntries(t); addEntry(t, null, false); save();
+  } else if (act === 'bulk') {
+    const lines = $('bulk-' + t).value.split('\n').map(l => l.trim()).filter(Boolean);
+    let n = 0;
+    lines.forEach(l => { const d = BULK[t](l.split('|').map(x => x.trim())); if (d) { s.entries.push({ id: s.nextId++, ...d }); n++; } });
+    if (n && s.entries.length > n && isBlankEntry(s.entries[0])) s.entries.shift();   // drop leftover blank first row
+    renderEntries(t); save(); $('bulk-' + t).value = '';
+    toast(n ? `${n} entr${n === 1 ? 'y' : 'ies'} added` : 'Nothing imported – check the line format');
+  } else if (row) {
+    const id = +row.dataset.id, i = s.entries.findIndex(x => x.id === id);
+    if (act === 'del') s.entries.splice(i, 1);
+    else if (act === 'up' && i > 0) [s.entries[i - 1], s.entries[i]] = [s.entries[i], s.entries[i - 1]];
+    else if (act === 'down' && i < s.entries.length - 1) [s.entries[i + 1], s.entries[i]] = [s.entries[i], s.entries[i + 1]];
+    renderEntries(t); save();
+  }
+});
+
+/* =====================================================================
+ * 3a. CROSSWORD MODULE  (greedy intersecting placement, many random tries)
+ *
+ * Words are placed on an unbounded grid stored in a Map keyed "row,col".
+ * canPlace() enforces standard crossword rules (matching crossings, empty
+ * squares before/after, no accidental side-by-side letters, must cross).
+ * buildLayout() runs randomised attempts for ~0.7s and keeps the best.
+ * ===================================================================== */
+function cwCanPlace(cells, word, r, c, dir) {
+  const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0, len = word.length;
+  if (cells.has(key(r - dr, c - dc))) return -1;
+  if (cells.has(key(r + dr * len, c + dc * len))) return -1;
+  let crossings = 0;
+  for (let i = 0; i < len; i++) {
+    const rr = r + dr * i, cc = c + dc * i, cell = cells.get(key(rr, cc));
+    if (cell) {
+      if (cell.ch !== word[i]) return -1;
+      if (cell[dir] != null) return -1;
+      crossings++;
+    } else if (cells.has(key(rr + dc, cc + dr)) || cells.has(key(rr - dc, cc - dr))) return -1;
+  }
+  return crossings;
+}
+
+function cwTryLayout(order) {
+  const cells = new Map(), placed = [];
+  let b = { minR: 0, maxR: 0, minC: 0, maxC: 0 }, totalCross = 0;
+
+  const put = (item, r, c, dir) => {
+    const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
+    for (let i = 0; i < item.word.length; i++) {
+      const k = key(r + dr * i, c + dc * i);
+      let cell = cells.get(k);
+      if (!cell) { cell = { ch: item.word[i], across: null, down: null }; cells.set(k, cell); }
+      cell[dir] = item.id;
+    }
+    const er = r + dr * (item.word.length - 1), ec = c + dc * (item.word.length - 1);
+    b = { minR: Math.min(b.minR, r), maxR: Math.max(b.maxR, er), minC: Math.min(b.minC, c), maxC: Math.max(b.maxC, ec) };
+    placed.push({ ...item, row: r, col: c, dir });
+  };
+
+  const findBest = item => {
+    let best = null, bestScore = -Infinity;
+    const w = item.word;
+    for (const [k, cell] of cells) {
+      const [cr, cc] = k.split(',').map(Number);
+      for (let i = 0; i < w.length; i++) {
+        if (w[i] !== cell.ch) continue;
+        for (const dir of ['across', 'down']) {
+          if (cell[dir] != null) continue;
+          const r = dir === 'down' ? cr - i : cr, c = dir === 'across' ? cc - i : cc;
+          const x = cwCanPlace(cells, w, r, c, dir);
+          if (x < 1) continue;
+          const er = r + (dir === 'down' ? w.length - 1 : 0), ec = c + (dir === 'across' ? w.length - 1 : 0);
+          const h = Math.max(b.maxR, er) - Math.min(b.minR, r) + 1, wd = Math.max(b.maxC, ec) - Math.min(b.minC, c) + 1;
+          const score = x * 40 - h * wd - Math.abs(h - wd) * 2 + Math.random() * 4;
+          if (score > bestScore) { bestScore = score; best = { r, c, dir, x }; }
+        }
+      }
+    }
+    return best;
+  };
+
+  put(order[0], 0, 0, 'across');
+  let remaining = order.slice(1), progress = true;
+  while (remaining.length && progress) {
+    progress = false;
+    const next = [];
+    for (const item of remaining) {
+      const spot = findBest(item);
+      if (spot) { put(item, spot.r, spot.c, spot.dir); totalCross += spot.x; progress = true; } else next.push(item);
+    }
+    remaining = next;
+  }
+  const area = (b.maxR - b.minR + 1) * (b.maxC - b.minC + 1);
+  return { placed, unplaced: remaining, score: placed.length * 10000 + totalCross * 50 - area };
+}
+
+function cwBuildLayout(items) {
+  let best = null;
+  const t0 = performance.now();
+  for (let attempt = 0; attempt < 500 && performance.now() - t0 < 700; attempt++) {
+    const order = items.map(it => ({ it, k: it.word.length + (attempt ? Math.random() * 4 : 0) }))
+                       .sort((a, b) => b.k - a.k).map(o => o.it);
+    const res = cwTryLayout(order);
+    if (!best || res.score > best.score) best = res;
+    if (best.unplaced.length === 0 && attempt >= 120) break;
+  }
+  return best;
+}
+
+/** Normalise coordinates to 0-based and assign clue numbers (row-major). */
+function cwFinalize(layout) {
+  const minR = Math.min(...layout.placed.map(p => p.row)), minC = Math.min(...layout.placed.map(p => p.col));
+  const words = layout.placed.map(p => ({ ...p, row: p.row - minR, col: p.col - minC }));
+  const starts = [...new Set(words.map(w => w.row + ',' + w.col))].map(s => s.split(',').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const numFor = {}; starts.forEach(([r, c], i) => numFor[r + ',' + c] = i + 1);
+  words.forEach(w => w.num = numFor[w.row + ',' + w.col]);
+  const grid = new Map(); let rows = 0, cols = 0;
+  words.forEach(w => {
+    for (let i = 0; i < w.word.length; i++) {
+      const r = w.row + (w.dir === 'down' ? i : 0), c = w.col + (w.dir === 'across' ? i : 0);
+      grid.set(key(r, c), w.word[i]); rows = Math.max(rows, r + 1); cols = Math.max(cols, c + 1);
+    }
+  });
+  const nums = new Map(); words.forEach(w => nums.set(key(w.row, w.col), w.num));
+  const byNum = (a, b) => a.num - b.num;
+  return { rows, cols, grid, nums, across: words.filter(w => w.dir === 'across').sort(byNum),
+           down: words.filter(w => w.dir === 'down').sort(byNum), unplaced: layout.unplaced };
+}
+
+/** Validate → build. Returns { errors, data, warnings } */
+function genCrossword() {
+  const errors = [], seen = new Map(), items = [];
+  S.cw.entries.forEach((e, i) => {
+    const n = i + 1, clue = e.clue.trim(), word = clean(e.answer);
+    if (!clue && !e.answer.trim()) return;
+    if (!clue) return errors.push(`Question ${n} has an answer but no clue.`);
+    if (!word) return errors.push(`Question ${n} has a clue but no usable answer (letters or digits required).`);
+    if (word.length < 2) return errors.push(`Question ${n}: answer “${esc(e.answer)}” is too short (minimum 2 characters).`);
+    if (seen.has(word)) return errors.push(`Questions ${seen.get(word)} and ${n} have the same answer (${esc(word)}). Each answer must be unique.`);
+    seen.set(word, n);
+    items.push({ id: e.id, clue, word, hint: (e.hint || '').trim() });
+  });
+  if (items.length < 2 && !errors.length) errors.push('Add at least 2 questions with answers to build a crossword.');
+  if (errors.length) return { errors };
+
+  const layout = cwBuildLayout(items);
+  if (layout.placed.length < 2)
+    return { errors: ['None of the answers share a common letter with each other.',
+                      'Try adding words that overlap in letters (for example, add an answer containing E, A, or R), or change some answers.'] };
+  const data = cwFinalize(layout), warnings = [];
+  if (data.unplaced.length) warnings.push({
+    title: `Crossword created, but ${data.unplaced.length} word${data.unplaced.length > 1 ? 's were' : ' was'} left out.`,
+    lines: [`Could not fit: <b>${data.unplaced.map(u => esc(u.word)).join(', ')}</b>`,
+            'These words need letters in common with the placed words. Try changing them, adding connecting words, or press “New layout” in the preview.'] });
+  return { errors: [], data, warnings };
+}
+
+function cwClueHTML(w) {
+  const counts = S.cw.counts ? ` (${w.word.length})` : '';
+  const hint = w.hint ? ` <i>(${esc(w.hint)})</i>` : '';
+  return `<div class="clue-item"><b>${w.num}.</b> ${esc(w.clue)}${hint}${counts}</div>`;
+}
+/** Split Across + Down clues into 3 balanced columns (robust for PDF export). */
+function cwClueColumns(d) {
+  const blocks = [], wt = text => 1 + Math.ceil(text.length / 34);
+  if (d.across.length) { blocks.push({ h: 'Across', w: 1.6 }); d.across.forEach(w => blocks.push({ html: cwClueHTML(w), w: wt(w.clue + (w.hint || '')) })); }
+  if (d.down.length) { blocks.push({ h: 'Down', w: 1.6 }); d.down.forEach(w => blocks.push({ html: cwClueHTML(w), w: wt(w.clue + (w.hint || '')) })); }
+  const total = blocks.reduce((s, b) => s + b.w, 0), target = total / 3;
+  const cols = [[], [], []]; let ci = 0, acc = 0;
+  blocks.forEach((b, i) => {
+    const isHeading = !!b.h;
+    if (ci < 2 && acc >= target - 0.5 && !(isHeading === false && blocks[i - 1] && blocks[i - 1].h)) { ci++; acc = 0; }
+    cols[ci].push(b); acc += b.w;
+  });
+  return cols.filter(c => c.length).map(c => `<div class="clue-col">${c.map(b => b.h ? `<h3>${b.h}</h3>` : b.html).join('')}</div>`).join('');
+}
+function renderCrossword(d) {
+  const { rows, cols, grid, nums } = d;
+  const cell = Math.max(18, Math.min(40, Math.floor(660 / cols * DK[DENS])));
+  const numSize = Math.max(8, Math.round(cell * 0.28)), ltrSize = Math.round(cell * 0.56);
+  let cellsHTML = '';
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const k = key(r, c), ch = grid.get(k);
+    if (!ch) { cellsHTML += '<div></div>'; continue; }
+    const cls = ['xcell', !grid.has(key(r, c - 1)) ? 'bl' : '', !grid.has(key(r - 1, c)) ? 'bt' : ''].join(' ');
+    const n = nums.get(k);
+    cellsHTML += `<div class="${cls}">${n ? `<span class="num" style="font-size:${numSize}px">${n}</span>` : ''}` +
+                 `<span class="ltr" style="font-size:${ltrSize}px">${esc(ch)}</span></div>`;
+  }
+  return `<div class="grid-wrap"><div class="xgrid" style="grid-template-columns:repeat(${cols}, ${cell}px); grid-auto-rows:${cell}px;">${cellsHTML}</div></div>
+          <div class="clue-cols">${cwClueColumns(d)}</div>`;
+}
+
+/* =====================================================================
+ * 3b. MATCHING MODULE
+ *   data = { items:[{a,b}], perm }   perm[r] = index of the item shown at
+ *   Column-B position r.  Column A keeps its entered order.
+ * ===================================================================== */
+function genMatching() {
+  const errors = [], items = [], seenA = new Map(), seenB = new Map();
+  S.mt.entries.forEach((e, i) => {
+    const a = e.a.trim(), b = e.b.trim(), n = i + 1;
+    if (!a && !b) return;
+    if (!a || !b) return errors.push(`Pair ${n} needs both a Column A and a Column B item.`);
+    const ka = a.toLowerCase(), kb = b.toLowerCase();
+    if (seenA.has(ka)) errors.push(`Pairs ${seenA.get(ka)} and ${n} have the same Column A item (“${esc(a)}”) – the answer would be ambiguous.`);
+    if (seenB.has(kb)) errors.push(`Pairs ${seenB.get(kb)} and ${n} have the same Column B item (“${esc(b)}”) – the answer would be ambiguous.`);
+    seenA.set(ka, n); seenB.set(kb, n);
+    items.push({ a, b });
+  });
+  if (items.length < 2 && !errors.length) errors.push('Add at least 2 complete pairs to build a matching task.');
+  if (items.length > 26) errors.push('Matching tasks support up to 26 pairs per sheet (about 8–12 fit nicely on one page).');
+  if (errors.length) return { errors };
+
+  // Shuffle Column B – prefer a derangement so nothing sits across from its own match
+  const idx = items.map((_, i) => i);
+  let perm = shuffle(idx);
+  for (let t = 0; t < 200 && perm.some((v, i) => v === i); t++) perm = shuffle(idx);
+  if (perm.every((v, i) => v === i)) perm = idx.slice(1).concat(idx[0]);
+  return { errors: [], data: { items, perm }, warnings: [] };
+}
+
+function renderMatching(d, keyOn) {
+  const n = d.items.length, style = S.mt.style;
+  const rightOf = []; d.perm.forEach((idx, r) => rightOf[idx] = r);   // item i → right position
+  if (style === 'letter') {
+    const left = d.items.map((it, i) => `<div class="m-item"><span class="m-num">${i + 1}.</span>
+      <span class="m-box">${keyOn ? `[&nbsp;&nbsp;<b class="ans">${label(rightOf[i])}</b>&nbsp;&nbsp;]` : '[&nbsp;___&nbsp;]'}</span>
+      <span class="m-txt">${esc(it.a)}</span></div>`).join('');
+    const right = d.perm.map((idx, r) => `<div class="m-item"><span class="m-let">${label(r)}.</span><span class="m-txt">${esc(d.items[idx].b)}</span></div>`).join('');
+    return `<div class="sheet-instr">Write the letter of the matching item from Column B in the brackets next to each item in Column A.</div>
+      <div class="m-cols"><div class="m-col"><h3>Column A</h3>${left}</div><div class="m-col"><h3>Column B</h3>${right}</div></div>`;
+  }
+  // Line-matching: fixed row height so connector coordinates are exact (works for print & PDF)
+  const perLine = PERLINE[DENS], maxLines = Math.max(...d.items.map(it => Math.max(Math.ceil(it.a.length / perLine), Math.ceil(it.b.length / perLine))));
+  const H = Math.max(44 - DENS * 4, maxLines * LH[DENS] + 14 - DENS * 2), CW = 275, GW = 140;
+  const left = d.items.map((it, i) => `<div class="m-row" style="height:${H}px"><b style="min-width:22px">${i + 1}.</b><span>${esc(it.a)}</span></div>`).join('');
+  const right = d.perm.map((idx, r) => `<div class="m-row" style="height:${H}px"><b style="min-width:22px">${label(r)}.</b><span>${esc(d.items[idx].b)}</span></div>`).join('');
+  let svg = '';
+  for (let i = 0; i < n; i++) {
+    const yl = i * H + H / 2, yr = rightOf[i] * H + H / 2;
+    if (keyOn) svg += `<line x1="6" y1="${yl}" x2="${GW - 6}" y2="${yr}" stroke="#1d4ed8" stroke-width="2.2" stroke-linecap="round"/>`;
+    svg += `<circle cx="6" cy="${yl}" r="4.5" fill="#000"/><circle cx="${GW - 6}" cy="${i * H + H / 2}" r="4.5" fill="#000"/>`;
+  }
+  return `<div class="sheet-instr">Draw a line from each item in Column A to its match in Column B.</div>
+    <div class="m-head"><div style="width:${CW}px"><h3>Column A</h3></div><div style="width:${GW}px"></div><div style="width:${CW}px"><h3>Column B</h3></div></div>
+    <div style="display:flex">
+      <div style="width:${CW}px">${left}</div>
+      <svg width="${GW}" height="${n * H}" viewBox="0 0 ${GW} ${n * H}" xmlns="http://www.w3.org/2000/svg">${svg}</svg>
+      <div style="width:${CW}px">${right}</div>
+    </div>`;
+}
+
+/* =====================================================================
+ * 3c. WORD SEARCH / WORD SCRAMBLE MODULE
+ *   data = { size, grid, placed:[{word,clue,r,c,dr,dc}], unplaced, items:[{word,clue,scrambled}], opts }
+ *   Search grid and scrambles are both generated, so the Activity,
+ *   Clue and Answer-key toggles can switch instantly afterwards.
+ * ===================================================================== */
+function wsScramble(w) {
+  const a = [...w]; if (new Set(a).size < 2) return w;
+  let s = w;
+  for (let i = 0; i < 60; i++) { s = shuffle(a).join(''); if (s !== w) break; }
+  return s;
+}
+
+function wsBuildGrid(items, size, diag, back) {
+  const dirs = [[0, 1], [1, 0]];
+  if (diag) dirs.push([1, 1], [-1, 1]);
+  if (back) { dirs.push([0, -1], [-1, 0]); if (diag) dirs.push([-1, -1], [1, -1]); }
+  let best = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const grid = Array.from({ length: size }, () => Array(size).fill(null)), placed = [], unplaced = [];
+    const order = items.map(it => ({ it, k: it.word.length + Math.random() * 3 })).sort((a, b) => b.k - a.k).map(o => o.it);
+    for (const it of order) {
+      const L = [...it.word]; let ok = false;
+      for (let t = 0; t < 400 && !ok; t++) {
+        const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+        const r = Math.floor(Math.random() * size), c = Math.floor(Math.random() * size);
+        const er = r + dr * (L.length - 1), ec = c + dc * (L.length - 1);
+        if (er < 0 || er >= size || ec < 0 || ec >= size) continue;
+        let fits = true;
+        for (let i = 0; i < L.length; i++) { const v = grid[r + dr * i][c + dc * i]; if (v !== null && v !== L[i]) { fits = false; break; } }
+        if (!fits) continue;
+        for (let i = 0; i < L.length; i++) grid[r + dr * i][c + dc * i] = L[i];
+        placed.push({ word: it.word, clue: it.clue, r, c, dr, dc }); ok = true;
+      }
+      if (!ok) unplaced.push(it);
+    }
+    if (!best || unplaced.length < best.unplaced.length) best = { grid, placed, unplaced };
+    if (!unplaced.length) break;
+  }
+  // Fill remaining squares with random letters
+  const ascii = items.every(i => /^[A-Z0-9]+$/.test(i.word));
+  const pool = ascii ? [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'] : [...new Set(items.flatMap(i => [...i.word]))];
+  best.grid = best.grid.map(row => row.map(v => v === null ? pool[Math.floor(Math.random() * pool.length)] : v));
+  return best;
+}
+
+function genWordSearch() {
+  const errors = [], seen = new Map(), items = [], size = S.ws.size;
+  S.ws.entries.forEach((e, i) => {
+    const n = i + 1, word = clean(e.word);
+    if (!e.word.trim() && !(e.clue || '').trim()) return;
+    if (!word) return errors.push(`Word ${n} is empty (letters or digits required).`);
+    if (word.length < 2) return errors.push(`Word ${n}: “${esc(e.word)}” is too short (minimum 2 characters).`);
+    if (seen.has(word)) return errors.push(`Words ${seen.get(word)} and ${n} are the same (${esc(word)}).`);
+    seen.set(word, n);
+    items.push({ word, clue: (e.clue || '').trim(), scrambled: wsScramble(word) });
+  });
+  if (items.length < 2 && !errors.length) errors.push('Add at least 2 words to build this worksheet.');
+  const tooLong = items.filter(it => [...it.word].length > size);
+  if (tooLong.length) errors.push(`Too long for a ${size}×${size} grid: <b>${tooLong.map(i => esc(i.word)).join(', ')}</b>. Choose a bigger grid or shorter words.`);
+  if (errors.length) return { errors };
+
+  const g = wsBuildGrid(items, size, S.ws.diag, S.ws.back), warnings = [];
+  if (g.unplaced.length) warnings.push({
+    title: `${g.unplaced.length} word${g.unplaced.length > 1 ? 's' : ''} could not fit in the word search grid.`,
+    lines: [`Left out of the grid: <b>${g.unplaced.map(u => esc(u.word)).join(', ')}</b> (they still appear in Scramble mode).`,
+            'Use a bigger grid, fewer words, or press “New layout” to try again.'] });
+  return { errors: [], data: { size, grid: g.grid, placed: g.placed, unplaced: g.unplaced, items, opts: { diag: S.ws.diag, back: S.ws.back } }, warnings };
+}
+
+function renderWordSearch(d, keyOn) {
+  const theme = S.ws.theme.trim(), clueMode = S.ws.clueMode;
+  const sub = theme ? `<div class="sheet-sub">Theme: ${esc(theme)}</div>` : '';
+  const clueText = it => it.clue ? esc(it.clue) : `<i>${[...it.word].length} letters</i>`;
+
+  if (S.ws.mode === 'scramble') {
+    const rows = d.items.map((it, i) => `<div class="sc-row">
+        <div class="sc-main"><span class="sc-num">${i + 1}.</span><span class="sc-scr">${esc(it.scrambled)}</span>
+          <span class="sc-line">${keyOn ? `<span class="ans">${esc(it.word)}</span>` : ''}</span></div>
+        ${clueMode ? `<div class="sc-clue">Clue: ${clueText(it)}</div>` : ''}</div>`);
+    const cols = d.items.length > 10 ? splitCols(rows, 2) : [rows];
+    return `${sub}<div class="sheet-instr">Unscramble the letters to make a word. Write each word on the line.</div>
+      <div class="sc-wrap">${cols.map(c => `<div class="sc-col">${c.join('')}</div>`).join('')}</div>`;
+  }
+
+  // ---- Word search ----
+  const { size, grid, placed } = d, hl = new Set();
+  if (keyOn) placed.forEach(p => { for (let i = 0; i < [...p.word].length; i++) hl.add(key(p.r + p.dr * i, p.c + p.dc * i)); });
+  const cell = Math.max(18, Math.min(38, Math.floor(640 / size * DK[DENS]))), fs = Math.round(cell * 0.5);
+  let cells = '';
+  for (let r = 0; r < size; r++) for (let c = 0; c < size; c++)
+    cells += `<div class="wscell${hl.has(key(r, c)) ? ' hl' : ''}" style="font-size:${fs}px">${esc(grid[r][c])}</div>`;
+  const dirs = ['across', 'down', ...(d.opts.diag ? ['diagonally'] : [])].join(', ').replace(/, ([^,]*)$/, ' or $1');
+  const instr = `Find and circle the hidden words. Words go ${dirs}${d.opts.back ? ', and may be written backwards' : ''}.`;
+
+  let bank;
+  if (clueMode) {
+    const items = placed.slice().sort((a, b) => a.word.localeCompare(b.word));
+    // number in the order the teacher entered them
+    const order = d.items.filter(it => placed.some(p => p.word === it.word));
+    const html = order.map((it, i) => `<div class="wb-clue"><b>${i + 1}.</b> ${clueText(it)} <span style="color:#555">(${[...it.word].length})</span>${keyOn ? ` → <span class="ans">${esc(it.word)}</span>` : ''}</div>`);
+    bank = `<div class="wb-title" style="margin-bottom:8px">Clues – solve each one, then find the word</div>
+            <div class="wb-wrap">${splitCols(html, 2).map(c => `<div class="wb-col">${c.join('')}</div>`).join('')}</div>`;
+    void items;
+  } else {
+    const words = placed.map(p => p.word).sort((a, b) => a.localeCompare(b)).map(w => `<div class="wb-item">☐ ${esc(w)}</div>`);
+    bank = `<div class="wb-title">Word Bank</div>
+            <div class="wb-wrap">${splitCols(words, 3).map(c => `<div class="wb-col">${c.join('')}</div>`).join('')}</div>`;
+  }
+  return `${sub}<div class="sheet-instr">${instr}</div>
+    <div class="grid-wrap"><div class="wsgrid" style="grid-template-columns:repeat(${size}, ${cell}px); grid-auto-rows:${cell}px;">${cells}</div></div>${bank}`;
+}
+
+/* =====================================================================
+ * 3d. FILL IN THE BLANKS MODULE
+ *   Sentence entry: wrap each word to hide in *asterisks*.
+ *   data = { items:[{segs:[{t:'text'|'blank', v}], answers:[]}], bank:[shuffled answers] }
+ * ===================================================================== */
+function fbParse(text) {
+  const raw = String(text || '');
+  if ((raw.match(/\*/g) || []).length % 2) return { err: 'has an unmatched * (wrap each hidden word in a pair of asterisks)' };
+  const parts = raw.split('*'), segs = [], answers = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) { if (parts[i]) segs.push({ t: 'text', v: parts[i] }); }
+    else {
+      const a = parts[i].trim();
+      if (!a) return { err: 'has an empty pair of asterisks' };
+      segs.push({ t: 'blank', v: a }); answers.push(a);
+    }
+  }
+  return { segs, answers };
+}
+function fbInfo(text) {
+  if (!String(text || '').trim()) return 'No sentence yet';
+  const r = fbParse(text);
+  if (r.err) return `<span class="fb-warn">⚠ This sentence ${r.err}</span>`;
+  return r.answers.length
+    ? `${r.answers.length} blank${r.answers.length > 1 ? 's' : ''} → <b>${r.answers.map(esc).join(', ')}</b>`
+    : 'No blanks yet – wrap the word to hide in *asterisks*';
+}
+
+function genFillBlanks() {
+  const errors = [], items = [];
+  S.fb.entries.forEach((e, i) => {
+    const n = i + 1, text = e.text.trim();
+    if (!text) return;
+    const r = fbParse(text);
+    if (r.err) return errors.push(`Sentence ${n} ${r.err}.`);
+    if (!r.answers.length) return errors.push(`Sentence ${n} has no blanks – wrap the word(s) to hide in *asterisks*.`);
+    items.push({ segs: r.segs, answers: r.answers });
+  });
+  if (!items.length && !errors.length) errors.push('Add at least 1 sentence with a blank.');
+  if (errors.length) return { errors };
+  return { errors: [], data: { items, bank: shuffle(items.flatMap(it => it.answers)) }, warnings: [] };
+}
+
+function renderFillBlanks(d, keyOn) {
+  const { hint, blank, bank } = S.fb;
+  const blankHTML = a => {
+    const n = [...a].length, w = blank === 'uniform' ? 14 : Math.max(6, n + 3);
+    const first = hint === 'first' && !keyOn ? esc([...a][0]) : '';
+    const inner = keyOn ? `<span class="ans">${esc(a)}</span>` : first;
+    return `<span class="fb-blank${first ? ' fb-first' : ''}" style="min-width:${w}ch">${inner}</span>` +
+           (hint === 'count' ? `<span class="fb-cnt">(${n})</span>` : '');
+  };
+  const rows = d.items.map((it, i) =>
+    `<div class="fb-item"><span class="fb-num">${i + 1}.</span><span class="fb-text">${it.segs.map(s => s.t === 'text' ? esc(s.v) : blankHTML(s.v)).join('')}</span></div>`).join('');
+  const bankHTML = bank ? `<div class="fb-bank"><div class="fb-bank-t">Word Bank</div>${d.bank.map(w => `<span class="fb-w">${esc(w)}</span>`).join('')}</div>` : '';
+  return `<div class="sheet-instr">Fill in each blank with the correct word${bank ? ' from the word bank' : ''}.</div>${bankHTML}<div class="fb-list">${rows}</div>`;
+}
+
+/* =====================================================================
+ * 4. UNIFIED SHEET CORE  – every task renders into the same #sheet
+ * ===================================================================== */
+const GEN = { cw: genCrossword, mt: genMatching, ws: genWordSearch, fb: genFillBlanks };
+const REN = { cw: renderCrossword, mt: renderMatching, ws: renderWordSearch, fb: renderFillBlanks };
+const NAMES = { cw: 'Crossword', mt: 'Matching task', ws: 'Word search / scramble', fb: 'Fill-in-the-blanks worksheet' };
+const defaultTitle = t => t === 'fb' ? 'Fill in the Blanks' : t === 'cw' ? 'Crossword Puzzle' : t === 'mt' ? 'Matching Task' : (S.ws.mode === 'scramble' ? 'Word Scramble' : 'Word Search');
+
+/* Usable sheet height per page, in sheet pixels. Matches the PDF export scaling
+   (690px sheet → page width minus 0.5in margins) so "fits on 1 page" is true for both Print and PDF. */
+const PAGE_H = { letter: 910, a4: 1005 };
+
+/** Render the active task into #sheet. If "Auto-fit" is on, step through density tiers
+ *  (d0 → d3: smaller type, tighter spacing, smaller grid cells) until it fits one page. */
+function renderSheet() {
+  const t = activeTask, d = P[t], sheet = $('sheet');
+  $('previewWarn').innerHTML = d && d.warnings ? d.warnings.map(w => msgBox('warn', w.title, w.lines)).join('') : '';
+  if (!d) {
+    $('sheetCard').classList.add('hidden'); $('emptyState').classList.remove('hidden');
+    $('emptyState').innerHTML = `No ${NAMES[t].toLowerCase()} yet. Open its tab, add your content and press <b>Generate</b>.`;
+    $('pageChip').textContent = ''; $('pageGuides').innerHTML = '';
+    return;
+  }
+  $('sheetCard').classList.remove('hidden'); $('emptyState').classList.add('hidden');
+
+  const keyOn = $('optKey').checked, sh = S.shared;
+  const title = S[t].title.trim() || defaultTitle(t);
+  const header = (sh.name || sh.date) ? `
+    <div class="sheet-header">
+      ${sh.name ? '<div class="name"><span>Name:</span><span class="line"></span></div>' : '<div style="flex:1"></div>'}
+      ${sh.date ? '<div class="date"><span>Date:</span><span class="line"></span></div>' : ''}
+    </div>` : '';
+  const footer = sh.creator.trim() ? `<div class="sheet-footer">Created by: ${esc(sh.creator.trim())}</div>` : '';
+  const limit = PAGE_H[sh.page] || PAGE_H.letter;
+  const measurable = sheet.offsetParent !== null;     // hidden views can't be measured
+
+  let tier = 0;
+  for (; tier <= 3; tier++) {
+    DENS = tier;
+    sheet.className = (keyOn ? 'key ' : '') + 'd' + tier;
+    sheet.innerHTML = `${header}<div class="sheet-title">${esc(title)}</div><div class="key-tag">ANSWER KEY</div>${REN[t](d, keyOn)}${footer}`;
+    if (!sh.fit || !measurable || sheet.offsetHeight <= limit) break;
+  }
+  tier = Math.min(tier, 3);
+
+  if (measurable) {
+    const pages = Math.max(1, Math.ceil(sheet.offsetHeight / limit - 0.01));
+    const chip = $('pageChip');
+    chip.className = 'page-chip' + (pages > 1 ? ' multi' : '');
+    chip.textContent = (pages === 1 ? '✓ Fits on 1 page' : `${pages} pages`) + (tier ? ' · compacted' : '');
+    $('pageGuides').innerHTML = Array.from({ length: pages - 1 }, (_, i) =>
+      `<div class="pg-line" style="top:${(i + 1) * limit}px"><span>page ${i + 2}</span></div>`).join('');
+  }
+}
+
+/** Validate → build → store → preview.  Errors/warnings go to the task's message box. */
+function generate(t) {
+  const box = $('msg-' + t); box.innerHTML = '';
+  const r = GEN[t]();
+  if (r.errors.length) {
+    box.innerHTML = msgBox('error', 'Please fix the following before generating:', r.errors);
+    showView(t); box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+  P[t] = r.data; P[t].warnings = r.warnings || [];
+  box.innerHTML = P[t].warnings.map(w => msgBox('warn', w.title, w.lines)).join('');
+  showView('preview', t);
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+ * 5. VIEWS, PRINT, PDF
+ * ------------------------------------------------------------------- */
+function showView(v, task) {
+  if (task) activeTask = task;
+  else if (TASKS.includes(v)) activeTask = v;
+  VIEWS.forEach(n => {
+    $('view-' + n).classList.toggle('hidden', n !== v);
+    $('tab-' + n).setAttribute('aria-selected', String(n === v));
+  });
+  document.querySelectorAll('[data-pv]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pv === activeTask)));
+  if (v === 'preview') renderSheet();
+  window.scrollTo({ top: 0 });
+}
+VIEWS.forEach(n => $('tab-' + n).onclick = () => showView(n));
+document.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => showView('preview', b.dataset.pv));
+$('btnBack').onclick = () => showView(activeTask);
+$('btnShuffle').onclick = () => { generate(activeTask); };
+$('optKey').addEventListener('change', renderSheet);
+
+$('btnPrint').onclick = () => {
+  if (!P[activeTask]) return toast('Generate a worksheet first');
+  window.print();
+};
+
+$('btnPdf').onclick = async () => {
+  if (!P[activeTask]) return toast('Generate a worksheet first');
+  if (typeof html2pdf === 'undefined') return toast('PDF library could not load (offline?). Use Print → “Save as PDF” instead.');
+  const btn = $('btnPdf'), lbl = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Creating PDF…';
+  window.scrollTo(0, 0);
+  const base = (S[activeTask].title.trim() || defaultTitle(activeTask)).replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '') || 'worksheet';
+  const opt = {
+    margin: [0.5, 0.5, 0.5, 0.5],
+    filename: `${base}${$('optKey').checked ? '_answer_key' : ''}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
+    jsPDF: { unit: 'in', format: S.shared.page, orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'], avoid: ['.clue-item', '.grid-wrap', 'h3', '.m-item', '.sc-row', '.wb-clue', '.fb-item', '.fb-bank', '.sheet-footer'] }
+  };
+  try { await html2pdf().set(opt).from($('sheet')).save(); toast('PDF downloaded'); }
+  catch (err) { console.error(err); toast('PDF export failed – try Print → Save as PDF'); }
+  finally { btn.disabled = false; btn.textContent = lbl; }
+};
+
+/* ---------------------------------------------------------------------
+ * Init
+ * ------------------------------------------------------------------- */
+load();
+bind('shCreator', S.shared, 'creator'); bind('shName', S.shared, 'name'); bind('shDate', S.shared, 'date'); bind('shPage', S.shared, 'page');
+bind('cwTitle', S.cw, 'title'); bind('cwCounts', S.cw, 'counts');
+bind('mtTitle', S.mt, 'title'); bind('mtStyle', S.mt, 'style');
+bind('wsTitle', S.ws, 'title'); bind('wsTheme', S.ws, 'theme'); bind('wsMode', S.ws, 'mode'); bind('wsSize', S.ws, 'size');
+bind('wsClue', S.ws, 'clueMode'); bind('wsDiag', S.ws, 'diag'); bind('wsBack', S.ws, 'back');
+bind('fbTitle', S.fb, 'title'); bind('fbBank', S.fb, 'bank'); bind('fbHint', S.fb, 'hint'); bind('fbBlank', S.fb, 'blank'); bind('shFit', S.shared, 'fit');
+syncInputs();
+TASKS.forEach(renderEntries);
+showView('cw');
+</script>
+
+<script>
+/* Appearance UI: mode button, theme menu, sliding glass thumbs, pointer specular light */
+(function () {
+  var T = window.WS_THEME;
+  var THEMES = [
+    { id: 'glass',     name: 'Liquid Glass', sub: 'Frosted & luminous' },
+    { id: 'aurora',    name: 'Aurora',       sub: 'Teal & violet glow' },
+    { id: 'sunset',    name: 'Sunset',       sub: 'Coral & peach glass' },
+    { id: 'wood',      name: 'Warm Wood',    sub: 'Planks & parchment' },
+    { id: 'stone',     name: 'Slate Stone',  sub: 'Chiseled & calm' },
+    { id: 'classroom', name: 'Classroom',    sub: 'Whiteboard / chalkboard' },
+    { id: 'original',  name: 'Classic',      sub: 'The original look' }
+  ];
+  var ICON = {
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+    auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>'
+  };
+  var svg = function (k, s) { return '<svg viewBox="0 0 24 24" width="' + (s || 20) + '" height="' + (s || 20) + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[k] + '</svg>'; };
+  var CHECK = '<svg class="t-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg>';
+
+  var btn = document.getElementById('themeBtn'), mbtn = document.getElementById('modeBtn'), menu = document.getElementById('themeMenu');
+  menu.innerHTML =
+    '<div class="menu-title">Appearance</div>' +
+    '<div class="mode-seg" role="radiogroup" aria-label="Color mode">' +
+      [['light', 'Light', 'sun'], ['auto', 'Auto', 'auto'], ['dark', 'Dark', 'moon']].map(function (m) {
+        return '<button type="button" role="radio" data-mode="' + m[0] + '" aria-checked="false">' + svg(m[2], 16) + m[1] + '</button>';
+      }).join('') + '</div>' +
+    '<div class="menu-title">Theme</div><div class="theme-grid" role="radiogroup" aria-label="Theme">' +
+      THEMES.map(function (t) {
+        return '<button type="button" role="radio" class="theme-card" data-theme-id="' + t.id + '" aria-checked="false">' +
+          '<span class="t-swatch sw-' + t.id + '"></span><span class="t-name">' + t.name + '</span><span class="t-sub">' + t.sub + '</span>' + CHECK + '</button>';
+      }).join('') + '</div>';
+  var modeBtns = [].slice.call(menu.querySelectorAll('[data-mode]')), cards = [].slice.call(menu.querySelectorAll('.theme-card'));
+
+  function sync() {
+    var s = T.state();
+    modeBtns.forEach(function (b) { b.setAttribute('aria-checked', String(b.dataset.mode === s.pref)); });
+    cards.forEach(function (c) { c.setAttribute('aria-checked', String(c.dataset.themeId === s.theme)); });
+    mbtn.innerHTML = svg(s.mode === 'dark' ? 'moon' : 'sun', 21);
+    var next = s.mode === 'dark' ? 'light' : 'dark';
+    mbtn.title = 'Switch to ' + next + ' mode'; mbtn.setAttribute('aria-label', mbtn.title);
+    mbtn.setAttribute('aria-pressed', String(s.mode === 'dark'));
+  }
+  function place() {
+    var r = btn.getBoundingClientRect(), right = Math.max(8, window.innerWidth - r.right - 4);
+    menu.style.top = (r.bottom + 10) + 'px'; menu.style.right = right + 'px';
+    menu.style.maxHeight = Math.max(240, window.innerHeight - r.bottom - 22) + 'px';
+  }
+  function open() { place(); menu.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); sync(); var c = menu.querySelector('[aria-checked="true"].theme-card'); c && c.focus({ preventScroll: true }); }
+  function close(refocus) { menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); if (refocus) btn.focus(); }
+
+  btn.addEventListener('click', function () { menu.classList.contains('open') ? close() : open(); });
+  mbtn.addEventListener('click', function () {
+    mbtn.classList.remove('spin'); void mbtn.offsetWidth; mbtn.classList.add('spin');
+    T.toggleMode();
+  });
+  modeBtns.forEach(function (b) { b.addEventListener('click', function () { T.setMode(b.dataset.mode); }); });
+  cards.forEach(function (c, i) {
+    c.addEventListener('click', function () {
+      T.setTheme(c.dataset.themeId);
+      var t = THEMES.filter(function (x) { return x.id === c.dataset.themeId; })[0];
+      if (typeof toast === 'function' && t) toast(t.name + ' theme');
+    });
+    c.addEventListener('keydown', function (e) {
+      var k = { ArrowRight: 1, ArrowDown: 2, ArrowLeft: -1, ArrowUp: -2 }[e.key];
+      if (k) { e.preventDefault(); cards[(i + k + cards.length) % cards.length].focus(); }
+    });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.classList.contains('open')) close(true); });
+  document.addEventListener('click', function (e) { if (menu.classList.contains('open') && !e.target.closest('#themeMenu, #themeWrap')) close(); });
+  window.addEventListener('resize', function () { if (menu.classList.contains('open')) place(); });
+  window.addEventListener('scroll', function () { if (menu.classList.contains('open')) place(); }, { passive: true });
+
+  /* Sliding glass thumb under segmented controls (visible in glass themes) */
+  function thumbs() {
+    [].forEach.call(document.querySelectorAll('.seg'), function (seg) {
+      var th = seg.querySelector('.seg-thumb'), on = seg.querySelector('[aria-selected="true"]');
+      if (!th || !on || !seg.offsetWidth) return;
+      th.style.width = on.offsetWidth + 'px'; th.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+      if (!th.classList.contains('ready')) requestAnimationFrame(function () { th.classList.add('ready'); });
+    });
+  }
+  var ro = window.ResizeObserver ? new ResizeObserver(thumbs) : null, mo = new MutationObserver(thumbs);
+  [].forEach.call(document.querySelectorAll('.seg'), function (seg) {
+    mo.observe(seg, { subtree: true, attributes: true, attributeFilter: ['aria-selected'] }); ro && ro.observe(seg);
+  });
+  window.addEventListener('resize', thumbs);
+
+  /* Pointer-tracking specular highlight on glass panels */
+  var raf = 0, ev = null;
+  document.addEventListener('pointermove', function (e) {
+    if (document.documentElement.getAttribute('data-fam') !== 'glass') return;
+    ev = e; if (raf) return;
+    raf = requestAnimationFrame(function () {
+      raf = 0;
+      var p = ev.target.closest && ev.target.closest('header.bg-white, .bg-white.rounded-2xl');
+      if (!p || p.classList.contains('sheet-card')) return;
+      var r = p.getBoundingClientRect();
+      p.style.setProperty('--mx', (ev.clientX - r.left) + 'px'); p.style.setProperty('--my', (ev.clientY - r.top) + 'px');
+    });
+  }, { passive: true });
+
+  T.onChange(function () { sync(); requestAnimationFrame(thumbs); });
+  sync(); thumbs();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(thumbs);
+})();
+</script>
+</body>
+</html>
